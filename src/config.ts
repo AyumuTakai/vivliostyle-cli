@@ -1,11 +1,11 @@
 import Ajv from 'ajv';
 import fs from 'fs';
 import { JSDOM } from 'jsdom';
-import path from 'upath';
 import pkgUp from 'pkg-up';
 import process from 'process';
 import puppeteer from 'puppeteer';
 import resolvePkg from 'resolve-pkg';
+import path from 'upath';
 import { processMarkdown } from './markdown';
 import configSchema from './schema/vivliostyle.config.schema.json';
 import { PageSize } from './server';
@@ -23,12 +23,14 @@ export interface UriTheme {
   type: 'uri';
   name: string;
   location: string;
+  replace?: string;
 }
 
 export interface FileTheme {
   type: 'file';
   name: string;
   location: string;
+  replace?: string;
 }
 
 export interface PackageTheme {
@@ -36,6 +38,7 @@ export interface PackageTheme {
   name: string;
   location: string;
   style: string;
+  replace?: string;
 }
 
 export interface ParsedEntry {
@@ -145,13 +148,16 @@ export function parseTheme(
   // node_modules, local pkg
   const pkgRootDir = resolvePkg(locator, { cwd: contextDir });
   if (!pkgRootDir?.endsWith('.css')) {
-    const style = parseStyleLocator(pkgRootDir ?? stylePath, locator);
+    const packageJson = pkgJson(pkgRootDir ?? stylePath);
+    const style = parseStyleLocator(packageJson, locator);
+    const replace = parseReplaceLocator(packageJson);
     if (style) {
       return {
         type: 'package',
         name: style.name,
         location: pkgRootDir ?? stylePath,
         style: style.maybeStyle,
+        replace,
       };
     }
   }
@@ -164,17 +170,22 @@ export function parseTheme(
   };
 }
 
-function parseStyleLocator(
-  pkgRootDir: string,
-  locator: string,
-): { name: string; maybeStyle: string } | undefined {
+function pkgJson(pkgRootDir: string | undefined) {
+  if (!pkgRootDir) {
+    return undefined;
+  }
   const pkgJsonPath = path.join(pkgRootDir, 'package.json');
   if (!fs.existsSync(pkgJsonPath)) {
     return undefined;
   }
-
   const packageJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+  return packageJson;
+}
 
+function parseStyleLocator(
+  packageJson: any,
+  locator: string,
+): { name: string; maybeStyle: string } | undefined {
   const maybeStyle =
     packageJson?.vivliostyle?.theme?.style ??
     packageJson.style ??
@@ -187,6 +198,11 @@ function parseStyleLocator(
     );
   }
   return { name: packageJson.name, maybeStyle };
+}
+
+function parseReplaceLocator(packageJson: any): string | undefined {
+  const replace = packageJson?.vivliostyle?.theme?.replace ?? undefined;
+  return replace;
 }
 
 function parsePageSize(size: string): PageSize {

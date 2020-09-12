@@ -1,3 +1,4 @@
+import { ReplaceRule } from '@vivliostyle/vfm/lib/plugins/replace';
 import chalk from 'chalk';
 import fs from 'fs';
 import globby from 'globby';
@@ -6,8 +7,8 @@ import h from 'hastscript';
 import { imageSize } from 'image-size';
 import { JSDOM } from 'jsdom';
 import { lookup as mime } from 'mime-types';
-import path from 'upath';
 import shelljs from 'shelljs';
+import path from 'upath';
 import { contextResolve, Entry, MergedConfig, ParsedEntry } from './config';
 import { processMarkdown } from './markdown';
 import { debug } from './util';
@@ -153,6 +154,7 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
           entry.target.dir,
           path.join(distDir, 'themes', entry.theme.name),
         );
+
         break;
       case 'package':
         style = path.relative(
@@ -194,9 +196,18 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
       compiledEntry = html;
     } else {
       // compile markdown
+      let replace: ReplaceRule[] | undefined = undefined;
+      if (entry.theme?.replace) {
+        const replaceFile = path.join(
+          entry.theme.location,
+          entry.theme.replace,
+        );
+        replace = require(replaceFile);
+      }
       const vfile = processMarkdown(entry.source.path, {
         style,
         title: entry.title,
+        replace: replace,
       });
       compiledEntry = String(vfile);
     }

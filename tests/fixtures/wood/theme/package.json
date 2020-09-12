@@ -1,0 +1,28 @@
+{
+  "name": "themeForTest",
+  "author": "John Doe <john@example.com>",
+  "keywords": [
+    "vivliostyle",
+    "vivliostyle-theme"
+  ],
+  "files": [
+    "*.css"
+  ],
+  "vivliostyle": {
+    "theme": {
+      "style": "./theme.css",
+      "name": "Test theme",
+      "author": "John Doe",
+      "category": "journal",
+      "topics": [
+        "テスト用",
+        "replace.js有り",
+        "PlantUML"
+      ],
+      "replace": "replace.js"
+    }
+  },
+  "dependencies": {
+    "plantuml-encoder": "^1.4.0"
+  }
+}

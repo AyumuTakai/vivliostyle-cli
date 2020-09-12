@@ -1,7 +1,6 @@
 import execa from 'execa';
 import fileType from 'file-type';
 import fs from 'fs';
-import path from 'upath';
 import {
   PDFCatalog,
   PDFDict,
@@ -10,6 +9,7 @@ import {
   PDFName,
   PDFNumber,
 } from 'pdf-lib';
+import path from 'upath';
 
 const rootPath = path.resolve(__dirname, '..');
 const packageJSON = require(path.join(rootPath, 'package.json'));
@@ -62,20 +62,19 @@ it.only('generate pdf without errors', async () => {
   expect(type!.mime).toEqual('application/pdf');
 }, 20000);
 
-it('generate press-ready pdf without errors', async () => {
-  const outputPath = path.join(localTmpDir, 'test-press-ready.pdf');
+it.only('generate pdf with config', async () => {
+  const outputPath = path.join(localTmpDir, 'test.pdf');
   cleanUp(outputPath);
 
   try {
     const response = await vivliostyleCLI([
       'build',
-      '-s',
-      'A4',
+      '-c',
+      'bibliostyle.config.js',
       '-o',
       outputPath,
-      '--press-ready',
-      fixtureFile,
     ]);
+    expect(response.stdout).toContain('has been created');
   } catch (err) {
     throw err.stderr;
   }

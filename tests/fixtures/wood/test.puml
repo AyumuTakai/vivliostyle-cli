@@ -1,0 +1,11 @@
+@startuml
+  hide footbox
+  skinparam monochrome true
+  skinparam shadowing<<no_shadow>> false
+  autonumber
+
+  actor Alice
+  actor Bob
+  Alice -> Bob: Hello
+  Bob --> Alice: Hi!
+@enduml

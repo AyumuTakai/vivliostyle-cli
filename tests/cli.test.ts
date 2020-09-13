@@ -67,13 +67,7 @@ it.only('generate pdf with config', async () => {
   cleanUp(outputPath);
 
   try {
-    const response = await vivliostyleCLI([
-      'build',
-      '-c',
-      'bibliostyle.config.js',
-      '-o',
-      outputPath,
-    ]);
+    const response = await vivliostyleCLI(['build', '-o', outputPath]);
     expect(response.stdout).toContain('has been created');
   } catch (err) {
     throw err.stderr;

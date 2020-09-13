@@ -4,5 +4,5 @@ module.exports = {
   language: 'ja', // default to `en`.
   size: 'A5', // paper size.
   theme: './theme', // .css or local dir or npm package. default to undefined.
-  entry: ['index.md'], // `entry` can be `string` or `object` if there's only single markdown file.
+  entry: ['./index.md'], // `entry` can be `string` or `object` if there's only single markdown file.
 };

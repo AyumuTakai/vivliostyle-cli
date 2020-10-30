@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import fs from 'fs';
 import globby from 'globby';
 import toHTML from 'hast-util-to-html';
+// @ts-ignore
 import h from 'hastscript';
 import { imageSize } from 'image-size';
 import { JSDOM } from 'jsdom';

@@ -99,19 +99,17 @@ export function generateToC(entries: ParsedEntry[], distDir: string) {
       ),
     ),
   );
-  const toc = h(
-    'html',
-    h(
-      'head',
+  const toc = h('html', [
+    h('head', [
       h('title', 'Table of Contents'),
       h('link', {
         href: 'manifest.json',
         rel: 'manifest',
         type: 'application/webpub+json',
       }),
-    ),
+    ]),
     h('body', h('nav#toc', { role: 'doc-toc' }, h('ul', items))),
-  );
+  ]);
   return toHTML(toc);
 }
 

@@ -1,8 +1,11 @@
 import chalk from 'chalk';
 import program from 'commander';
-import path from 'upath';
+import * as fs from 'fs';
+import { PDFArray, PDFDocument, PDFStream } from 'pdf-lib';
 import process from 'process';
 import terminalLink from 'terminal-link';
+import path from 'upath';
+import * as zlib from 'zlib';
 import { buildArtifacts, cleanup } from '../builder';
 import {
   CliFlags,
@@ -78,6 +81,46 @@ build({
   executableChromium: program.executableChromium,
 }).catch(gracefulError);
 
+async function mergeCover(coverPath: string | undefined, srcPath: string) {
+  const mergedPdf = await PDFDocument.create();
+
+  // 指定されたカバーがPDFなら追加
+  if (coverPath?.endsWith('.pdf')) {
+    const coverPDF = await PDFDocument.load(fs.readFileSync(coverPath));
+    const copiedPagesA = await mergedPdf.copyPages(
+      coverPDF,
+      coverPDF.getPageIndices(),
+    );
+    copiedPagesA.forEach((page) => mergedPdf.addPage(page));
+    // 空白ページを追加
+    mergedPdf.addPage();
+  }
+
+  const sourcePDF = await PDFDocument.load(fs.readFileSync(srcPath));
+  const copiedPagesB = await mergedPdf.copyPages(
+    sourcePDF,
+    sourcePDF.getPageIndices(),
+  );
+
+  copiedPagesB.forEach((page) => {
+    // ページ番号の調整のため
+    // コンテンツに@DELETE@が含まれていたらそのページは追加しない
+    const contents: PDFStream | PDFArray | undefined = page.node.Contents();
+    // Deflate圧縮されているコンテンツを展開する
+    // @ts-ignore
+    const inflated = zlib.inflateSync(contents.getContents());
+    // Bufferを文字列化
+    const decoded = inflated.toString('utf-8');
+    const deleteMarker = /<0023> Tj\n.*<0027> Tj\n.*<0028> Tj\n.*<002F> Tj\n.*<0028> Tj\n.*<0037> Tj\n.*<0028> Tj\n.*<0023> Tj\n/m;
+    if (!decoded.match(deleteMarker)) {
+      mergedPdf.addPage(page);
+    }
+  });
+
+  const mergedPdfFile = await mergedPdf.save();
+  fs.writeFileSync(srcPath, mergedPdfFile);
+}
+
 export default async function build(cliFlags: BuildCliFlags) {
   startLogging('Collecting build config');
 
@@ -99,6 +142,8 @@ export default async function build(cliFlags: BuildCliFlags) {
     ...config,
     input: manifestPath,
   });
+
+  await mergeCover(config.cover, output);
 
   stopLogging('Built successfully.', '🎉');
 

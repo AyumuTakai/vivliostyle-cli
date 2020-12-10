@@ -93,7 +93,7 @@ export function generateToC(entries: ParsedEntry[], distDir: string) {
       'li',
       h(
         'a',
-        { href: path.relative(distDir, entry.target.path) },
+        { href: path.posix.relative(distDir, entry.target.path) },
         entry.title || path.basename(entry.target.path, '.html'),
       ),
     ),

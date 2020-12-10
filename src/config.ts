@@ -147,7 +147,11 @@ export function parseTheme(
 
   // node_modules, local pkg
   const pkgRootDir = resolvePkg(locator, { cwd: contextDir });
-  if (!pkgRootDir?.endsWith('.css')) {
+  if (
+    pkgRootDir &&
+    !pkgRootDir?.endsWith('.css') &&
+    !pkgRootDir?.endsWith('.scss')
+  ) {
     const packageJson = pkgJson(pkgRootDir ?? stylePath);
     const style = parseStyleLocator(packageJson, locator);
     const replace = parseReplaceLocator(packageJson);
@@ -197,7 +201,7 @@ function parseStyleLocator(
       `invalid style file: ${maybeStyle} while parsing ${locator}`,
     );
   }
-  return { name: packageJson.name, maybeStyle };
+  return { name: packageJson?.name, maybeStyle };
 }
 
 function parseReplaceLocator(packageJson: any): string | undefined {

@@ -24,6 +24,7 @@
     "chalk": "^4.1.0",
     "chokidar": "^3.4.0",
     "commander": "^5.1.0",
+    "dart-sass": "^1.25.0",
     "debug": "^4.1.1",
     "globby": "^11.0.1",
     "hast-util-to-html": "^7.1.1",

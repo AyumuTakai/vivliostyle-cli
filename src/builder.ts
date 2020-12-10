@@ -1,3 +1,4 @@
+import { ReplaceRule } from '@vivliostyle/vfm/lib/plugins/replace';
 import chalk from 'chalk';
 import fs from 'fs';
 import globby from 'globby';
@@ -210,9 +211,18 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
       compiledEntry = html;
     } else {
       // compile markdown
+      let replace: ReplaceRule[] | undefined = undefined;
+      if (entry.theme?.replace) {
+        const replaceFile = path.join(
+          entry.theme.location,
+          entry.theme.replace,
+        );
+        replace = require(replaceFile).modules;
+      }
       const vfile = processMarkdown(entry.source.path, {
         style,
         title: entry.title,
+        replace: replace,
       });
       compiledEntry = String(vfile);
     }

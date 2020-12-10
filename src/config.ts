@@ -1,11 +1,11 @@
 import Ajv from 'ajv';
 import fs from 'fs';
 import { JSDOM } from 'jsdom';
-import path from 'upath';
 import pkgUp from 'pkg-up';
 import process from 'process';
 import puppeteer from 'puppeteer';
 import resolvePkg from 'resolve-pkg';
+import path from 'upath';
 import { processMarkdown } from './markdown';
 import configSchema from './schema/vivliostyle.config.schema.json';
 import { PageSize } from './server';
@@ -144,7 +144,11 @@ export function parseTheme(
 
   // node_modules, local pkg
   const pkgRootDir = resolvePkg(locator, { cwd: contextDir });
-  if (!pkgRootDir?.endsWith('.css')) {
+  if (
+    pkgRootDir &&
+    !pkgRootDir?.endsWith('.css') &&
+    !pkgRootDir?.endsWith('.scss')
+  ) {
     const style = parseStyleLocator(pkgRootDir ?? stylePath, locator);
     if (style) {
       return {
@@ -186,7 +190,7 @@ function parseStyleLocator(
       `invalid style file: ${maybeStyle} while parsing ${locator}`,
     );
   }
-  return { name: packageJson.name, maybeStyle };
+  return { name: packageJson?.name, maybeStyle };
 }
 
 function parsePageSize(size: string): PageSize {

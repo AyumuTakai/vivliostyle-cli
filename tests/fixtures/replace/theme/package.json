@@ -1,0 +1,24 @@
+{
+  "name": "replace",
+  "author": "John Doe <john@example.com>",
+  "keywords": [
+    "vivliostyle",
+    "vivliostyle-theme"
+  ],
+  "files": [
+    "*.css"
+  ],
+  "vivliostyle": {
+    "theme": {
+      "style": "style.css",
+      "name": "Replace theme",
+      "author": "John Doe",
+      "category": "test",
+      "topics": [
+        "テスト用",
+        "replace.js有り"
+      ],
+      "replace": "replace.js"
+    }
+  }
+}

@@ -6,11 +6,12 @@ import h from 'hastscript';
 import { imageSize } from 'image-size';
 import { JSDOM } from 'jsdom';
 import { lookup as mime } from 'mime-types';
-import path from 'upath';
 import shelljs from 'shelljs';
+import path from 'upath';
 import { contextResolve, Entry, MergedConfig, ParsedEntry } from './config';
 import { processMarkdown } from './markdown';
 import { debug } from './util';
+const sass = require('dart-sass');
 
 export interface ManifestOption {
   title?: string;
@@ -113,6 +114,21 @@ export function generateToC(entries: ParsedEntry[], distDir: string) {
   return toHTML(toc);
 }
 
+/**
+ * sass(scss)をトランスパイルする
+ * 生成したCSSの場所によってurl()の指定がずれてしまう
+ * @param dir 基準になるディレクトリ
+ * @param scss sass(scss)ファイル名
+ */
+export function transpileSass(dir: string, scss: string) {
+  const result = sass.renderSync({
+    file: path.resolve(dir, scss),
+    outputStyle: 'expanded',
+    outFile: path.resolve(dir, 'style.scss'),
+  });
+  fs.writeFileSync(path.resolve(dir, 'style.scss'), result.css);
+}
+
 export async function buildArtifacts({
   entryContextDir,
   artifactDir,
@@ -210,7 +226,11 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
   for (const theme of themeIndexes) {
     switch (theme.type) {
       case 'file':
-        shelljs.cp(theme.location, themeRoot);
+        if (theme.name.endsWith('.scss')) {
+          transpileSass(themeRoot, theme.location);
+        } else {
+          shelljs.cp(theme.location, themeRoot);
+        }
         break;
       case 'package':
         const target = path.join(themeRoot, 'packages', theme.name);

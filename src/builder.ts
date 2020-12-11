@@ -54,7 +54,7 @@ export function generateManifest(outputPath: string, options: ManifestOption) {
     });
   }
 
-  if (options.cover) {
+  if (options.cover && !options.cover.endsWith('.pdf')) {
     const { width, height, type } = imageSize(options.cover);
     if (type) {
       const mimeType = mime(type);

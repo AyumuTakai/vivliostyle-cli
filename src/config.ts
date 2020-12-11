@@ -145,9 +145,8 @@ export function parseTheme(
   // node_modules, local pkg
   const pkgRootDir = resolvePkg(locator, { cwd: contextDir });
   if (
-    pkgRootDir &&
-    !pkgRootDir?.endsWith('.css') &&
-    !pkgRootDir?.endsWith('.scss')
+    pkgRootDir ||
+    !(pkgRootDir?.endsWith('.css') || pkgRootDir?.endsWith('.scss'))
   ) {
     const style = parseStyleLocator(pkgRootDir ?? stylePath, locator);
     if (style) {
@@ -181,8 +180,8 @@ function parseStyleLocator(
 
   const maybeStyle =
     packageJson?.vivliostyle?.theme?.style ??
-    packageJson.style ??
-    packageJson.main ??
+    packageJson?.style ??
+    packageJson?.main ??
     packageJson?.vivliostyle?.theme?.stylesheet; // TODO: remove theme.stylesheet
 
   if (!maybeStyle) {

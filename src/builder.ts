@@ -6,8 +6,8 @@ import h from 'hastscript';
 import { imageSize } from 'image-size';
 import { JSDOM } from 'jsdom';
 import { lookup as mime } from 'mime-types';
-import path from 'upath';
 import shelljs from 'shelljs';
+import path from 'upath';
 import { contextResolve, Entry, MergedConfig, ParsedEntry } from './config';
 import { processMarkdown } from './markdown';
 import { debug } from './util';
@@ -52,7 +52,7 @@ export function generateManifest(outputPath: string, options: ManifestOption) {
     });
   }
 
-  if (options.cover) {
+  if (options.cover && !options.cover.endsWith('.pdf')) {
     const { width, height, type } = imageSize(options.cover);
     if (type) {
       const mimeType = mime(type);

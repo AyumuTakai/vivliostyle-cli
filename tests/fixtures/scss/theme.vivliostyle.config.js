@@ -1,8 +1,8 @@
 module.exports = {
-  title: 'Scss Test',
+  title: 'Scss in theme Test',
   author: 'Author',
   language: 'en',
   size: 'A4',
-  theme: 'scss/style.scss',
+  theme: 'theme',
   entry: ['index.md'],
 };

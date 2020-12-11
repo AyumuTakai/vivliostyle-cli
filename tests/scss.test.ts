@@ -25,12 +25,18 @@ function vivliostyleCLI(args: string[]) {
   return execa(cliPath, args, { cwd: fixtureRoot });
 }
 
-it('generate pdf without errors', async () => {
-  const outputPath = path.join(localTmpDir, 'test-scss.pdf');
+it('generate pdf with scss file without errors', async () => {
+  const outputPath = path.join(localTmpDir, 'test-scss.file.pdf');
   cleanUp(outputPath);
 
   try {
-    const response = await vivliostyleCLI(['build', '-o', outputPath]);
+    const response = await vivliostyleCLI([
+      'build',
+      '-o',
+      outputPath,
+      '-c',
+      'file.vivliostyle.config.js',
+    ]);
     expect(response.stdout).toContain('has been created');
   } catch (err) {
     throw err.stderr;
@@ -41,11 +47,37 @@ it('generate pdf without errors', async () => {
   expect(type!.mime).toEqual('application/pdf');
 }, 20000);
 
-it('preview', async () => {
-  const subprocess = vivliostyleCLI(['preview']);
+it('generate pdf with scss theme without errors', async () => {
+  const outputPath = path.join(localTmpDir, 'test-scss.theme.pdf');
+  cleanUp(outputPath);
+
+  try {
+    const response = await vivliostyleCLI([
+      'build',
+      '-o',
+      outputPath,
+      '-c',
+      'theme.vivliostyle.config.js',
+    ]);
+    expect(response.stdout).toContain('has been created');
+  } catch (err) {
+    throw err.stderr;
+  }
+
+  // mimetype test
+  const type = await fileType.fromFile(outputPath);
+  expect(type!.mime).toEqual('application/pdf');
+}, 20000);
+
+it('preview theme', async () => {
+  const subprocess = vivliostyleCLI([
+    'preview',
+    '-c',
+    'theme.vivliostyle.config.sys',
+  ]);
   setTimeout(() => {
     subprocess.cancel();
-  }, 10 * 1000);
+  }, 1000);
 
   try {
     await subprocess;

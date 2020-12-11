@@ -145,9 +145,8 @@ export function parseTheme(
   // node_modules, local pkg
   const pkgRootDir = resolvePkg(locator, { cwd: contextDir });
   if (
-    pkgRootDir &&
-    !pkgRootDir?.endsWith('.css') &&
-    !pkgRootDir?.endsWith('.scss')
+    pkgRootDir ||
+    !(pkgRootDir?.endsWith('.css') || pkgRootDir?.endsWith('.scss'))
   ) {
     const style = parseStyleLocator(pkgRootDir ?? stylePath, locator);
     if (style) {
@@ -160,7 +159,7 @@ export function parseTheme(
     }
   }
 
-  // bare .css file
+  // bare .css/.scss file
   return {
     type: 'file',
     name: path.basename(locator),

@@ -1,0 +1,23 @@
+{
+  "name": "theme_for_scss_test",
+  "author": "Author",
+  "keywords": [
+    "vivliostyle",
+    "vivliostyle-theme"
+  ],
+  "files": [
+    "*.css"
+  ],
+  "vivliostyle": {
+    "theme": {
+      "style": "./scss/style.scss",
+      "name": "test for scss test",
+      "author": "Author",
+      "category": "test",
+      "topics": [
+        "theme for test",
+        "scss"
+      ]
+    }
+  }
+}

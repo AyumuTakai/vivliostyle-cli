@@ -188,7 +188,9 @@ export default async function build(cliFlags: BuildCliFlags) {
   });
 
   // 表紙を結合する
-  await mergeCover(config.cover, output);
+  if (config.cover) {
+    await mergeCover(config.cover, output);
+  }
 
   stopLogging('Built successfully.', '🎉');
 

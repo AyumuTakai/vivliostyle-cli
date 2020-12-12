@@ -11,7 +11,7 @@ import path from 'upath';
 import { contextResolve, Entry, MergedConfig, ParsedEntry } from './config';
 import { processMarkdown } from './markdown';
 import { debug } from './util';
-const sass = require('dart-sass');
+const sass = require('sass');
 
 export interface ManifestOption {
   title?: string;

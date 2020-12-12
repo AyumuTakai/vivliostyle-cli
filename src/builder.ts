@@ -118,16 +118,16 @@ export function generateToC(entries: ParsedEntry[], distDir: string) {
 /**
  * sass(scss)をトランスパイルする
  * 生成したCSSの場所によってurl()の指定がずれてしまう
- * @param dir 基準になるディレクトリ
- * @param scss sass(scss)ファイル名
+ * @param src 元ファイル
+ * @param dst 保存先ファイル名
  */
-export function transpileSass(dir: string, scss: string) {
+export function transpileSass(src: string, dst: string) {
   const result = sass.renderSync({
-    file: path.resolve(dir, scss),
+    file: src,
     outputStyle: 'expanded',
-    outFile: path.resolve(dir, 'style.scss'),
+    outFile: dst,
   });
-  fs.writeFileSync(path.resolve(dir, 'style.scss'), result.css);
+  fs.writeFileSync(dst, result.css);
 }
 
 export async function buildArtifacts({
@@ -237,7 +237,12 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
     switch (theme.type) {
       case 'file':
         if (theme.name.endsWith('.scss')) {
-          transpileSass(themeRoot, theme.location);
+          const src = path.resolve(
+            path.join(themeRoot, 'packages'),
+            theme.location,
+          );
+          const dst = path.resolve(themeRoot, theme.name);
+          transpileSass(src, dst);
         } else {
           shelljs.cp(theme.location, themeRoot);
         }
@@ -247,6 +252,11 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
         const targetDir = path.dirname(target);
         shelljs.mkdir('-p', targetDir);
         shelljs.cp('-r', theme.location, target);
+        if (theme.style.endsWith('.scss')) {
+          const src = path.join(theme.location, theme.style);
+          const dst = path.join(target, theme.style);
+          transpileSass(src, dst);
+        }
     }
   }
 

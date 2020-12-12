@@ -23,18 +23,21 @@ export interface UriTheme {
   type: 'uri';
   name: string;
   location: string;
+  vars: any | undefined;
 }
 
 export interface FileTheme {
   type: 'file';
   name: string;
   location: string;
+  vars: any | undefined;
 }
 
 export interface PackageTheme {
   type: 'package';
   name: string;
   location: string;
+  vars: any | undefined;
   style: string;
 }
 
@@ -62,6 +65,7 @@ export interface VivliostyleConfig {
   cover?: string;
   distDir?: string; // .vivliostyle
   timeout?: number;
+  theme_vars?: any;
 }
 
 export interface CliFlags {
@@ -100,6 +104,7 @@ export interface MergedConfig {
   timeout: number;
   sandbox: boolean;
   executableChromium: string;
+  themeVars: any | undefined;
 }
 
 const DEFAULT_TIMEOUT = 2 * 60 * 1000; // 2 minutes
@@ -126,6 +131,7 @@ function normalizeEntry(e: string | Entry): Entry {
 export function parseTheme(
   locator: string | undefined,
   contextDir: string,
+  themeVars: any | undefined = undefined,
 ): ParsedTheme | undefined {
   if (typeof locator !== 'string' || locator == '') {
     return undefined;
@@ -137,6 +143,7 @@ export function parseTheme(
       type: 'uri',
       name: path.basename(locator),
       location: locator,
+      vars: themeVars,
     };
   }
 
@@ -155,6 +162,7 @@ export function parseTheme(
         name: style.name,
         location: pkgRootDir ?? stylePath,
         style: style.maybeStyle,
+        vars: themeVars,
       };
     }
   }
@@ -164,6 +172,7 @@ export function parseTheme(
     type: 'file',
     name: path.basename(locator),
     location: stylePath,
+    vars: themeVars,
   };
 }
 
@@ -313,7 +322,7 @@ export async function mergeConfig<T extends CliFlags>(
   const themeIndexes: ParsedTheme[] = [];
   const rootTheme =
     parseTheme(cliFlags.theme, process.cwd()) ??
-    parseTheme(config?.theme, context);
+    parseTheme(config?.theme, context, config?.theme_vars);
   if (rootTheme) {
     themeIndexes.push(rootTheme);
   }
@@ -358,6 +367,8 @@ export async function mergeConfig<T extends CliFlags>(
     : [];
   const entries: ParsedEntry[] = rawEntries.map(normalizeEntry).map(parseEntry);
 
+  const themeVars = undefined;
+
   const parsedConfig = {
     entryContextDir,
     artifactDir,
@@ -377,6 +388,7 @@ export async function mergeConfig<T extends CliFlags>(
     timeout,
     sandbox,
     executableChromium,
+    themeVars,
   };
 
   debug('parsedConfig', parsedConfig);

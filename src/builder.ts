@@ -119,10 +119,22 @@ export function generateToC(entries: ParsedEntry[], distDir: string) {
  * 生成したCSSの場所によってurl()の指定がずれてしまう
  * @param src 元ファイル
  * @param dst 保存先ファイル名
+ * @param vars 上書きする変数
  */
-export function transpileSass(src: string, dst: string) {
+export function transpileSass(src: string, dst: string, vars: any = null) {
+  // 変数を上書きするために "with ( $name1:value1,$name2:value2, ... )"という文字列を作る
+  let with_vars: string = '';
+  if (vars && Object.keys(vars).length > 0) {
+    with_vars = ' with (';
+    for (let key in vars) {
+      with_vars += `$${key}:${vars[key]},`;
+    }
+    with_vars = with_vars.slice(0, -1) + ')'; // 最後の,を取り除く
+  }
+
   const result = sass.renderSync({
-    file: src,
+    // file: src,
+    data: `@use '${src}' ${with_vars};`,
     outputStyle: 'expanded',
     outFile: dst,
   });
@@ -232,7 +244,8 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
             theme.location,
           );
           const dst = path.resolve(themeRoot, theme.name);
-          transpileSass(src, dst);
+          const vars = theme.vars;
+          transpileSass(src, dst, vars);
         } else {
           shelljs.cp(theme.location, themeRoot);
         }
@@ -245,7 +258,8 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
         if (theme.style.endsWith('.scss')) {
           const src = path.join(theme.location, theme.style);
           const dst = path.join(target, theme.style);
-          transpileSass(src, dst);
+          const vars = theme.vars;
+          transpileSass(src, dst, vars);
         }
     }
   }

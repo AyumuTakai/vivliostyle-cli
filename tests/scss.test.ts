@@ -73,11 +73,11 @@ it('preview theme', async () => {
   const subprocess = vivliostyleCLI([
     'preview',
     '-c',
-    'theme.vivliostyle.config.sys',
+    'theme.vivliostyle.config.js',
   ]);
   setTimeout(() => {
     subprocess.cancel();
-  }, 1000);
+  }, 10000);
 
   try {
     await subprocess;

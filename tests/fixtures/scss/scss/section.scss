@@ -1,0 +1,8 @@
+@use 'variables' as *;
+
+section {
+  background-color: $bg_color;
+  h1 {
+    color: $color;
+  }
+}

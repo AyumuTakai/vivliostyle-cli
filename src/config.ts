@@ -146,7 +146,7 @@ export function parseTheme(
   const pkgRootDir = resolvePkg(locator, { cwd: contextDir });
   if (
     pkgRootDir ||
-    !(pkgRootDir?.endsWith('.css') || pkgRootDir?.endsWith('.scss'))
+    !(stylePath?.endsWith('.css') || stylePath?.endsWith('.scss'))
   ) {
     const style = parseStyleLocator(pkgRootDir ?? stylePath, locator);
     if (style) {

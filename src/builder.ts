@@ -194,15 +194,16 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
       const html = dom.serialize();
       compiledEntry = html;
     } else {
-      // compile markdown
+      // import replaceRules
       let replace: ReplaceRule[] | undefined = undefined;
       if (entry.theme?.replace) {
         const replaceFile = path.join(
           entry.theme.location,
           entry.theme.replace,
         );
-        replace = require(replaceFile).modules;
+        replace = require(replaceFile).replaces;
       }
+      // compile markdown
       const vfile = processMarkdown(entry.source.path, {
         style,
         title: entry.title,

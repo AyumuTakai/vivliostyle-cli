@@ -1,6 +1,8 @@
 # 置換機能テスト
 
-[test]
+[won't replace]
+
+[TODO: hard work]
 
 [newpage]
 

@@ -1,4 +1,4 @@
-exports.modules = [
+exports.replaces = [
   {
     // 強制改ページ
     test: /\[newpage]/g,
@@ -11,7 +11,11 @@ exports.modules = [
   {
     test: /\[TODO:(.+?)]/g,
     match: ([, str], h) => {
-      return h('span', { style: 'color:red;font-weight:bold;' }, str);
+      return h(
+        'span',
+        { style: 'color:red;font-weight:bold;' },
+        'TODO: ' + str,
+      );
     },
   },
 ];

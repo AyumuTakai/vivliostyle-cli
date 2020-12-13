@@ -1,11 +1,11 @@
 import Ajv from 'ajv';
 import fs from 'fs';
 import { JSDOM } from 'jsdom';
-import path from 'upath';
 import pkgUp from 'pkg-up';
 import process from 'process';
 import puppeteer from 'puppeteer';
 import resolvePkg from 'resolve-pkg';
+import path from 'upath';
 import { processMarkdown } from './markdown';
 import configSchema from './schema/vivliostyle.config.schema.json';
 import { PageSize } from './server';
@@ -234,9 +234,10 @@ export function collectVivliostyleConfig(
   }
   const config = require(configPath) as VivliostyleConfig;
 
-  const ajv = Ajv();
-  const valid = ajv.validate(configSchema, config);
-  if (!valid) {
+  const ajv = new Ajv();
+  const validate = ajv.compile(configSchema);
+  if (!validate(config)) {
+    console.log(validate.errors);
     throw new Error('Invalid vivliostyle.config.js');
   }
 

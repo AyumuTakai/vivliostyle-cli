@@ -262,9 +262,10 @@ export function collectVivliostyleConfig(
   }
   const config = require(configPath) as VivliostyleConfig;
 
-  const ajv = Ajv();
-  const valid = ajv.validate(configSchema, config);
-  if (!valid) {
+  const ajv = new Ajv();
+  const validate = ajv.compile(configSchema);
+  if (!validate(config)) {
+    console.log(validate.errors);
     throw new Error('Invalid vivliostyle.config.js');
   }
 

@@ -114,6 +114,26 @@ export function generateToC(entries: ParsedEntry[], distDir: string) {
   return toHTML(toc);
 }
 
+function clearReplaceCache(entries: ParsedEntry[]) {
+  for (const entry of entries) {
+    if (entry.theme?.replace) {
+      const replaceFile = path.join(entry.theme.location, entry.theme.replace);
+      delete require.cache[replaceFile];
+    }
+  }
+}
+
+function importReplaceRules(entry: ParsedEntry): ReplaceRule[] | undefined {
+  let replaceRules: ReplaceRule[] | undefined = undefined;
+  if (entry.theme?.replace) {
+    const replaceFile = path.join(entry.theme.location, entry.theme.replace);
+    if (fs.existsSync(replaceFile)) {
+      replaceRules = require(replaceFile).replaces;
+    }
+  }
+  return replaceRules;
+}
+
 export async function buildArtifacts({
   entryContextDir,
   artifactDir,
@@ -138,6 +158,8 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
   debug('entries', entries);
   debug('themes', themeIndexes);
 
+  // clear cache if replace.js
+  clearReplaceCache(entries);
   // populate entries
   shelljs.mkdir('-p', artifactDir);
   for (const entry of entries) {
@@ -194,24 +216,15 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
       const html = dom.serialize();
       compiledEntry = html;
     } else {
-      // import replaceRules
-      let replace: ReplaceRule[] | undefined = undefined;
-      if (entry.theme?.replace) {
-        const replaceFile = path.join(
-          entry.theme.location,
-          entry.theme.replace,
-        );
-        replace = require(replaceFile).replaces;
-      }
+      const replaceRules = importReplaceRules(entry);
       // compile markdown
       const vfile = processMarkdown(entry.source.path, {
         style,
         title: entry.title,
-        replace: replace,
+        replace: replaceRules,
       });
       compiledEntry = String(vfile);
     }
-
     fs.writeFileSync(entry.target.path, compiledEntry);
   }
 

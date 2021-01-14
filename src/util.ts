@@ -2,14 +2,24 @@ import chalk from 'chalk';
 import debugConstructor from 'debug';
 import fs from 'fs';
 import oraConstructor from 'ora';
-import path from 'upath';
 import portfinder from 'portfinder';
 import puppeteer from 'puppeteer';
+import tmp from 'tmp';
+import path from 'upath';
 import util from 'util';
 
 export const debug = debugConstructor('vs-cli');
 
 const ora = oraConstructor({ color: 'blue', spinner: 'circle' });
+
+let processAbortCallbacks: (() => void)[] = [];
+const abnormalSignals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+abnormalSignals.forEach((sig) => {
+  process.on(sig, () => {
+    processAbortCallbacks.forEach((fn) => fn());
+    process.exit(1);
+  });
+});
 
 export function startLogging(text?: string) {
   ora.start(text);
@@ -44,7 +54,10 @@ export function logInfo(...obj: string[]) {
 }
 
 export function gracefulError(err: Error) {
-  const message = `${chalk.red.bold('Error:')} ${err.message}`;
+  const message = err.stack
+    ? err.stack.replace(/^Error:/, chalk.red.bold('Error:'))
+    : `${chalk.red.bold('Error:')} ${err.message}`;
+
   if (ora.isSpinning) {
     ora.fail(message);
   } else {
@@ -116,11 +129,28 @@ export async function launchBrowser(
     handleSIGHUP: false,
     ...options,
   });
-  (['SIGINT', 'SIGTERM', 'SIGHUP'] as NodeJS.Signals[]).forEach((sig) => {
-    process.on(sig, () => {
-      browser.close();
-      process.exit(1);
-    });
+  processAbortCallbacks.push(() => {
+    browser.close();
   });
   return browser;
+}
+
+export function useTmpDirectory(): Promise<[string, () => void]> {
+  return new Promise<[string, () => void]>((res, rej) => {
+    tmp.dir((err, path, clear) => {
+      if (err) {
+        return rej(err);
+      }
+      debug(`Created the temporary directory: ${path}`);
+      const callback = () => {
+        clear();
+        debug(`Cleared the temporary directory: ${path}`);
+        processAbortCallbacks = processAbortCallbacks.filter(
+          (fn) => fn !== callback,
+        );
+      };
+      processAbortCallbacks.push(callback);
+      res([path, callback]);
+    });
+  });
 }

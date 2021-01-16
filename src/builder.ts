@@ -94,8 +94,8 @@ export function generateToC(entries: ParsedEntry[], distDir: string) {
       'li',
       h(
         'a',
-        { href: path.relative(distDir, entry.target.path) },
-        entry.title || path.basename(entry.target.path, '.html'),
+        { href: path.relative(distDir, entry.target) },
+        entry.title || path.basename(entry.target, '.html'),
       ),
     ),
   );
@@ -164,11 +164,11 @@ function importReplaceRules(entry: ParsedEntry): ReplaceRule[] | undefined {
 
 export async function buildArtifacts({
   entryContextDir,
+  workspaceDir,
   artifactDir,
   projectTitle,
   themeIndexes,
   entries,
-  distDir,
   projectAuthor,
   language,
   toc,
@@ -191,7 +191,7 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
   // populate entries
   shelljs.mkdir('-p', artifactDir);
   for (const entry of entries) {
-    shelljs.mkdir('-p', entry.target.dir);
+    shelljs.mkdir('-p', path.dirname(entry.target));
 
     // calculate style path
     let style;
@@ -201,15 +201,15 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
         break;
       case 'file':
         style = path.relative(
-          entry.target.dir,
-          path.join(distDir, 'themes', entry.theme.name),
+          path.dirname(entry.target),
+          path.join(workspaceDir, 'themes', entry.theme.name),
         );
         break;
       case 'package':
         style = path.relative(
-          entry.target.dir,
+          path.dirname(entry.target),
           path.join(
-            distDir,
+            workspaceDir,
             'themes',
             'packages',
             entry.theme.name,
@@ -221,12 +221,12 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
     let compiledEntry;
     if (entry.type === 'html') {
       // compile html
-      const dom = new JSDOM(fs.readFileSync(entry.source.path, 'utf8'));
+      const dom = new JSDOM(fs.readFileSync(entry.source, 'utf8'));
       const {
         window: { document },
       } = dom;
       if (!document) {
-        throw new Error('Invalid HTML document: ' + entry.source.path);
+        throw new Error('Invalid HTML document: ' + entry.source);
       }
 
       const titleEl = document.querySelector('title');
@@ -246,7 +246,7 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
     } else {
       const replaceRules = importReplaceRules(entry);
       // compile markdown
-      const vfile = processMarkdown(entry.source.path, {
+      const vfile = processMarkdown(entry.source, {
         style,
         title: entry.title,
         replace: replaceRules,
@@ -254,11 +254,11 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
       compiledEntry = String(vfile);
     }
 
-    fs.writeFileSync(entry.target.path, compiledEntry);
+    fs.writeFileSync(entry.target, compiledEntry);
   }
 
   // copy theme
-  const themeRoot = path.join(distDir, 'themes');
+  const themeRoot = path.join(workspaceDir, 'themes');
   shelljs.mkdir('-p', path.join(themeRoot, 'packages'));
   for (const theme of themeIndexes) {
     switch (theme.type) {
@@ -277,9 +277,8 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
         break;
       case 'package':
         const target = path.join(themeRoot, 'packages', theme.name);
-        const targetDir = path.dirname(target);
-        shelljs.mkdir('-p', targetDir);
-        shelljs.cp('-r', theme.location, target);
+        shelljs.mkdir('-p', target);
+        shelljs.cp('-r', path.join(theme.location, '*'), target);
         if (theme.style.endsWith('.scss')) {
           const src = path.join(theme.location, theme.style);
           const dst = path.join(target, theme.style);
@@ -311,11 +310,11 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
   // copy cover
   if (cover) {
     const { ext } = path.parse(cover);
-    shelljs.cp(cover, path.join(distDir, `cover${ext}`));
+    shelljs.cp(cover, path.join(workspaceDir, `cover${ext}`));
   }
 
   // generate manifest
-  const manifestPath = path.join(distDir, 'manifest.json');
+  const manifestPath = path.join(workspaceDir, 'manifest.json');
   generateManifest(manifestPath, {
     title: projectTitle,
     author: projectAuthor,
@@ -324,18 +323,18 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
     cover,
     entries: entries.map((entry) => ({
       title: entry.title,
-      path: path.relative(distDir, entry.target.path),
+      path: path.relative(workspaceDir, entry.target),
     })),
     modified: new Date().toISOString(),
   });
 
   // generate toc
   if (toc) {
-    const distTocPath = path.join(distDir, 'toc.html');
+    const distTocPath = path.join(workspaceDir, 'toc.html');
     if (typeof toc === 'string') {
       shelljs.cp(contextResolve(entryContextDir, toc)!, distTocPath);
     } else {
-      const tocString = generateToC(entries, distDir);
+      const tocString = generateToC(entries, workspaceDir);
       fs.writeFileSync(distTocPath, tocString);
     }
   }

@@ -277,6 +277,7 @@ Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
         break;
       case 'package':
         const target = path.join(themeRoot, 'packages', theme.name);
+        const targetDir = path.dirname(target);
         shelljs.mkdir('-p', target);
         shelljs.cp('-r', path.join(theme.location, '*'), target);
         if (theme.style.endsWith('.scss')) {

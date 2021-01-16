@@ -28,25 +28,25 @@ export interface UriTheme {
   type: 'uri';
   name: string;
   location: string;
-  replace?: string;
-  vars: any | undefined;
+  replace: string | undefined;
+  vars?: any | undefined;
 }
 
 export interface FileTheme {
   type: 'file';
   name: string;
   location: string;
-  replace?: string;
-  vars: any | undefined;
+  replace: string | undefined;
+  vars?: any | undefined;
 }
 
 export interface PackageTheme {
   type: 'package';
   name: string;
   location: string;
-  vars: any | undefined;
+  vars?: any | undefined;
   style: string;
-  replace?: string;
+  replace: string | undefined;
 }
 
 export interface ParsedEntry {
@@ -161,6 +161,7 @@ export function parseTheme(
       type: 'uri',
       name: path.basename(locator),
       location: locator,
+      replace: undefined,
       vars: themeVars,
     };
   }
@@ -182,7 +183,7 @@ export function parseTheme(
         name: style.name,
         location: pkgRootDir ?? stylePath,
         style: style.maybeStyle,
-        replace,
+        replace: replace,
         vars: themeVars,
       };
     }
@@ -193,6 +194,7 @@ export function parseTheme(
     type: 'file',
     name: path.basename(locator),
     location: stylePath,
+    replace: undefined,
     vars: themeVars,
   };
 }

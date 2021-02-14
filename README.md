@@ -1,4 +1,4 @@
-![Vivliostyle CLI](https://raw.githubusercontent.com/vivliostyle/vivliostyle-cli/master/assets/cover.jpg)
+![Vivliostyle CLI](assets/cover.jpg)
 
 [![npm](https://flat.badgen.net/npm/v/@vivliostyle/cli)][npm-url]
 ![npm: version (tag)](https://flat.badgen.net/npm/v/@vivliostyle/cli/next)
@@ -8,15 +8,11 @@
 
 Supercharge your command-line publication workflow.
 
-> ✏️ You want README for the stable release? see <https://github.com/vivliostyle/vivliostyle-cli/tree/v2.1.0#readme>.
-
 ## Install
 
 ```
 npm install -g @vivliostyle/cli
 ```
-
-If you are yolo-minded person, try `npm install -g @vivliostyle/cli@next`, which will installs the latest pre-release of Vivliostyle CLI.
 
 ## Use
 
@@ -45,6 +41,18 @@ vivliostyle init
 You are new to Vivliostyle? Check out our latest project [Create Book](https://github.com/vivliostyle/create-book#readme).
 With Create Book, you can easily bootstrap your book project and start writing without any extra effort.
 
+#### CLI Options
+
+```
+Options:
+  --title <title>            title
+  --author <author>          author
+  -l, --language <language>  language
+  -s, --size  <size>         paper size
+  -T, --theme <theme>        theme
+  -h, --help                 display help for command
+```
+
 ### `build`
 
 > build and create PDF file.
@@ -55,33 +63,31 @@ Put [vivliostyle.config.js](https://github.com/vivliostyle/vivliostyle-cli/issue
 vivliostyle build
 ```
 
-![build](https://raw.githubusercontent.com/vivliostyle/vivliostyle-cli/master/assets/build.gif)
+![build](assets/build.gif)
 
 #### CLI options
 
 ```
 Options:
-  -c, --config <config_file>        path to vivliostyle.config.js [vivliostyle.config.js]
-  -o, --out-file <output file>      specify output file path [<title>.pdf]
-  -d, --out-dir <output directory>  specify output directory
-  -t, --theme <theme>               theme path or package name
-  -s, --size <size>                 output pdf size [Letter]
-                                    preset: A5, A4, A3, B5, B4, JIS-B5, JIS-B4, letter, legal,
-                                    ledger
-                                    custom(comma separated): 182mm,257mm or 8.5in,11in
-  -p, --press-ready                 make generated PDF compatible with press ready PDF/X-1a
-                                    [false]
-  --title <title>                   title
-  --author <author>                 author
-  --language <language>             language
-  --verbose                         verbose log output
-  --dist-dir                        dist dir [.vivliostyle]
-  --timeout <seconds>               timeout limit for waiting Vivliostyle process [60s]
-  --no-sandbox                      launch chrome without sandbox. use this option when
-                                    ECONNREFUSED error occurred.
-  --executable-chromium <path>      specify a path of executable Chrome (or Chromium) you
-                                    installed
-  -h, --help                        display help for command
+  -c, --config <config_file>    path to vivliostyle.config.js [vivliostyle.config.js]
+  -o, --output <path>           specify output file name or directory [<title>.pdf]
+                                This option can be specified multiple, then each -o options can be supplied one -f option.
+                                ex: -o output1 -f webpub -o output2.pdf -f pdf
+  -f, --format <format>         specify output format corresponding output target
+                                If an extension is specified on -o option, this field will be inferenced automatically.
+  -s, --size <size>             output pdf size [Letter]
+                                preset: A5, A4, A3, B5, B4, JIS-B5, JIS-B4, letter, legal, ledger
+                                custom(comma separated): 182mm,257mm or 8.5in,11in
+  -p, --press-ready             make generated PDF compatible with press ready PDF/X-1a [false]
+  -t, --timeout <seconds>       timeout limit for waiting Vivliostyle process [60s]
+  -T, --theme <theme>           theme path or package name
+  --title <title>               title
+  --author <author>             author
+  -l, --language <language>     language
+  --verbose                     verbose log output
+  --no-sandbox                  launch chrome without sandbox. use this option when ECONNREFUSED error occurred.
+  --executable-chromium <path>  specify a path of executable Chrome (or Chromium) you installed
+  -h, --help                    display help for command
 ```
 
 ### `preview`
@@ -89,7 +95,7 @@ Options:
 > open preview page and save PDF interactively.
 
 ```bash
-vivliostyle preview <input>
+vivliostyle preview
 ```
 
 #### CLI options
@@ -97,17 +103,15 @@ vivliostyle preview <input>
 ```
 Options:
   -c, --config <config_file>    path to vivliostyle.config.js
-  -t, --theme <theme>           theme path or package name
+  -T, --theme <theme>           theme path or package name
   -s, --size <size>             output pdf size [Letter]
-                                preset: A5, A4, A3, B5, B4, JIS-B5, JIS-B4, letter, legal,
-                                ledger
+                                preset: A5, A4, A3, B5, B4, JIS-B5, JIS-B4, letter, legal, ledger
                                 custom(comma separated): 182mm,257mm or 8.5in,11in
   --title <title>               title
   --author <author>             author
-  --language <language>         language
+  -l, --language <language>     language
   --verbose                     verbose log output
-  --no-sandbox                  launch chrome without sandbox (use this option to avoid
-                                ECONNREFUSED error)
+  --no-sandbox                  launch chrome without sandbox (use this option to avoid ECONNREFUSED error)
   --executable-chromium <path>  specify a path of executable Chrome(Chromium) you installed
   -h, --help                    display help for command
 ```

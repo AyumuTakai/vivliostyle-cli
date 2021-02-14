@@ -1,120 +1,115 @@
 import { ReplaceRule } from '@vivliostyle/vfm/lib/plugins/replace';
+import Ajv from 'ajv';
+import addFormats from 'ajv-formats';
 import chalk from 'chalk';
 import fs from 'fs';
 import globby from 'globby';
-import toHTML from 'hast-util-to-html';
-import h from 'hastscript';
 import { imageSize } from 'image-size';
-import { JSDOM } from 'jsdom';
 import { lookup as mime } from 'mime-types';
 import shelljs from 'shelljs';
 import path from 'upath';
-import { contextResolve, Entry, MergedConfig, ParsedEntry } from './config';
+import {
+  ManuscriptEntry,
+  MergedConfig,
+  ParsedTheme,
+  WebPublicationManifestConfig,
+} from './config';
+import { TOC_TITLE } from './const';
+import { generateTocHtml, isTocHtml, processManuscriptHtml } from './html';
 import { processMarkdown } from './markdown';
-import { debug } from './util';
-
-export interface ManifestOption {
-  title?: string;
-  author?: string;
-  language?: string;
-  modified: string;
-  entries: Entry[];
-  toc?: boolean | string;
-  cover?: string;
-}
-
-export interface ManifestEntry {
-  href: string;
-  type: string;
-  rel?: string;
-  [index: string]: number | string | undefined;
-}
+import type {
+  PublicationLinks,
+  PublicationManifest,
+} from './schema/pubManifest';
+import {
+  publicationSchemaId,
+  publicationSchemas,
+} from './schema/pubManifest.schema';
+import type { EntryObject } from './schema/vivliostyle.config';
+import { debug, log } from './util';
 
 export function cleanup(location: string) {
+  debug('cleanup file', location);
   shelljs.rm('-rf', location);
 }
 
-// example: https://github.com/readium/webpub-manifest/blob/master/examples/MobyDick/manifest.json
-export function generateManifest(outputPath: string, options: ManifestOption) {
-  const entries: ManifestEntry[] = options.entries.map((entry) => ({
-    href: entry.path,
-    type: 'text/html',
+// https://www.w3.org/TR/pub-manifest/
+export function generateManifest(
+  outputPath: string,
+  entryContextDir: string,
+  options: {
+    title?: string;
+    author?: string;
+    language?: string | null;
+    modified: string;
+    entries: EntryObject[];
+    cover?: string;
+  },
+) {
+  const entries: PublicationLinks[] = options.entries.map((entry) => ({
+    url: entry.path,
     title: entry.title,
+    ...(entry.encodingFormat && { encodingFormat: entry.encodingFormat }),
+    ...(entry.rel && { rel: entry.rel }),
+    ...(entry.rel === 'contents' && { type: 'LinkedResource' }),
   }));
-  const links: ManifestEntry[] = [];
-  const resources: ManifestEntry[] = [];
-
-  if (options.toc) {
-    entries.splice(0, 0, {
-      href: 'toc.html',
-      rel: 'contents',
-      type: 'text/html',
-      title: 'Table of Contents',
-    });
-  }
+  const links: PublicationLinks[] = [];
+  const resources: PublicationLinks[] = [];
 
   if (options.cover) {
-    const { width, height, type } = imageSize(options.cover);
+    const { width, height, type } = imageSize(
+      path.resolve(entryContextDir, options.cover),
+    );
+    let mimeType: string | false = false;
     if (type) {
-      const mimeType = mime(type);
+      mimeType = mime(type);
       if (mimeType) {
-        const coverPath = `cover.${type}`;
         links.push({
           rel: 'cover',
-          href: coverPath,
-          type: mimeType,
+          url: options.cover,
+          encodingFormat: mimeType,
           width,
           height,
         });
       }
     }
+    if (!type || !mimeType) {
+      log(
+        `\n${chalk.yellow('Cover image ')}${chalk.bold.yellow(
+          `"${options.cover}"`,
+        )}${chalk.yellow(
+          ' was set in your configuration but couldn’t detect the image metadata. Please check a valid cover file is placed.',
+        )}`,
+      );
+    }
   }
 
-  const manifest = {
-    '@context': 'https://readium.org/webpub-manifest/context.jsonld',
-    metadata: {
-      '@type': 'http://schema.org/Book',
-      title: options.title,
-      author: options.author,
-      language: options.language,
-      modified: options.modified,
-    },
-    links,
+  const publication: PublicationManifest = {
+    '@context': ['https://schema.org', 'https://www.w3.org/ns/pub-context'],
+    type: 'Book',
+    conformsTo: 'https://github.com/vivliostyle/vivliostyle-cli',
+    author: options.author,
+    ...(options.language && { inLanguage: options.language }),
+    dateModified: options.modified,
+    name: options.title,
     readingOrder: entries,
     resources,
+    links,
   };
 
-  fs.writeFileSync(outputPath, JSON.stringify(manifest, null, 2));
+  fs.writeFileSync(outputPath, JSON.stringify(publication, null, 2));
+  const ajv = new Ajv({ strict: false });
+  addFormats(ajv);
+  ajv.addSchema(publicationSchemas);
+  const valid = ajv.validate(publicationSchemaId, publication);
+  if (!valid) {
+    throw new Error(
+      `Validation of pubManifest failed. Please check the schema: ${outputPath}`,
+    );
+  }
 }
 
-export function generateToC(entries: ParsedEntry[], distDir: string) {
-  const items = entries.map((entry) =>
-    h(
-      'li',
-      h(
-        'a',
-        { href: path.relative(distDir, entry.target.path) },
-        entry.title || path.basename(entry.target.path, '.html'),
-      ),
-    ),
-  );
-  const toc = h(
-    'html',
-    h(
-      'head',
-      h('title', 'Table of Contents'),
-      h('link', {
-        href: 'manifest.json',
-        rel: 'manifest',
-        type: 'application/webpub+json',
-      }),
-    ),
-    h('body', h('nav#toc', { role: 'doc-toc' }, h('ul', items))),
-  );
-  return toHTML(toc);
-}
-
-function clearReplaceCache(entries: ParsedEntry[]) {
+function clearReplaceCache(entries: ManuscriptEntry[]) {
   for (const entry of entries) {
     if (entry.theme?.replace) {
       const replaceFile = path.join(entry.theme.location, entry.theme.replace);
@@ -123,7 +118,7 @@ function clearReplaceCache(entries: ParsedEntry[]) {
   }
 }
 
-function importReplaceRules(entry: ParsedEntry): ReplaceRule[] | undefined {
+function importReplaceRules(entry: ManuscriptEntry): ReplaceRule[] | undefined {
   let replaceRules: ReplaceRule[] | undefined = undefined;
   if (entry.theme?.replace) {
     const replaceFile = path.join(entry.theme.location, entry.theme.replace);
@@ -134,165 +129,187 @@ function importReplaceRules(entry: ParsedEntry): ReplaceRule[] | undefined {
   return replaceRules;
 }
 
-export async function buildArtifacts({
-  entryContextDir,
-  artifactDir,
-  projectTitle,
-  themeIndexes,
-  entries,
-  distDir,
-  projectAuthor,
-  language,
-  toc,
-  cover,
-}: MergedConfig) {
-  if (entries.length === 0) {
-    throw new Error(
-      `Missing entry.
-Run ${chalk.green.bold('vivliostyle init')} to create ${chalk.bold(
-        'vivliostyle.config.js',
-      )}`,
-    );
-  }
-
+export async function compile(
+  {
+    entryContextDir,
+    workspaceDir,
+    manifestPath,
+    manifestAutoGenerate,
+    themeIndexes,
+    entries,
+    language,
+    cover,
+    input,
+  }: MergedConfig & WebPublicationManifestConfig,
+  { reload = false }: { reload?: boolean } = {},
+): Promise<void> {
   debug('entries', entries);
   debug('themes', themeIndexes);
 
+  if (
+    !reload &&
+    path.relative(workspaceDir, entryContextDir).startsWith('..')
+  ) {
+    // workspaceDir is placed on different directory
+    cleanup(workspaceDir);
+  }
+
+  const locateThemePath = (
+    from: string,
+    theme?: ParsedTheme,
+  ): string | undefined => {
+    switch (theme?.type) {
+      case 'uri':
+        return theme.location;
+      case 'file':
+        return path.relative(from, theme.destination);
+      case 'package':
+        return path.relative(from, path.join(theme.destination, theme.style));
+    }
+  };
+
+  const generativeContentsEntry = entries.find(
+    (e) => !('source' in e) && e.rel === 'contents',
+  );
+  if (
+    generativeContentsEntry &&
+    fs.existsSync(generativeContentsEntry.target) &&
+    !isTocHtml(generativeContentsEntry.target)
+  ) {
+    throw new Error(
+      `${generativeContentsEntry.target} is set as a destination to create a ToC HTML file, but there is already a document other than the ToC file in this location. Please move this file, or set a 'toc' option in vivliostyle.config.js to specify another destination for the ToC file.`,
+    );
+  }
+
+  const contentEntries = entries.filter(
+    (e): e is ManuscriptEntry => 'source' in e,
+  );
+
   // clear cache if replace.js
-  clearReplaceCache(entries);
-  // populate entries
-  shelljs.mkdir('-p', artifactDir);
-  for (const entry of entries) {
-    shelljs.mkdir('-p', entry.target.dir);
+  clearReplaceCache(contentEntries);
+
+  for (const entry of contentEntries) {
+    shelljs.mkdir('-p', path.dirname(entry.target));
 
     // calculate style path
-    let style;
-    switch (entry?.theme?.type) {
-      case 'uri':
-        style = entry.theme.location;
-        break;
-      case 'file':
-        style = path.relative(
-          entry.target.dir,
-          path.join(distDir, 'themes', entry.theme.name),
-        );
-        break;
-      case 'package':
-        style = path.relative(
-          entry.target.dir,
-          path.join(
-            distDir,
-            'themes',
-            'packages',
-            entry.theme.name,
-            entry.theme.style,
-          ),
-        );
-    }
-
-    let compiledEntry;
-    if (entry.type === 'html') {
-      // compile html
-      const dom = new JSDOM(fs.readFileSync(entry.source.path, 'utf8'));
-      const {
-        window: { document },
-      } = dom;
-      if (!document) {
-        throw new Error('Invalid HTML document: ' + entry.source.path);
-      }
-
-      const titleEl = document.querySelector('title');
-      if (titleEl && entry.title) {
-        titleEl.innerHTML = entry.title;
-      }
-
-      const linkEl = document.querySelector<HTMLLinkElement>(
-        'link[rel="stylesheet"',
-      );
-      if (linkEl && style) {
-        linkEl.href = style;
-      }
-
-      const html = dom.serialize();
-      compiledEntry = html;
-    } else {
+    const style = locateThemePath(path.dirname(entry.target), entry.theme);
+    if (entry.type === 'text/markdown') {
       const replaceRules = importReplaceRules(entry);
       // compile markdown
-      const vfile = processMarkdown(entry.source.path, {
+      const vfile = processMarkdown(entry.source, {
         style,
         title: entry.title,
+        language: language ?? undefined,
         replace: replaceRules,
       });
-      compiledEntry = String(vfile);
+      const compiledEntry = String(vfile);
+      fs.writeFileSync(entry.target, compiledEntry);
+    } else if (
+      entry.type === 'text/html' ||
+      entry.type === 'application/xhtml+xml'
+    ) {
+      if (entry.source !== entry.target) {
+        const html = processManuscriptHtml(entry.source, {
+          style,
+          title: entry.title,
+          contentType: entry.type,
+          language,
+        });
+        fs.writeFileSync(entry.target, html);
+      }
+    } else {
+      if (entry.source !== entry.target) {
+        shelljs.cp(entry.source, entry.target);
+      }
     }
-    fs.writeFileSync(entry.target.path, compiledEntry);
   }
 
   // copy theme
-  const themeRoot = path.join(distDir, 'themes');
-  shelljs.mkdir('-p', path.join(themeRoot, 'packages'));
   for (const theme of themeIndexes) {
-    switch (theme.type) {
-      case 'file':
-        shelljs.cp(theme.location, themeRoot);
-        break;
-      case 'package':
-        const target = path.join(themeRoot, 'packages', theme.name);
-        const targetDir = path.dirname(target);
-        shelljs.mkdir('-p', targetDir);
-        shelljs.cp('-r', theme.location, target);
+    if (theme.type === 'file') {
+      if (theme.location !== theme.destination) {
+        shelljs.mkdir('-p', path.dirname(theme.destination));
+        shelljs.cp(theme.location, theme.destination);
+      }
+    } else if (theme.type === 'package') {
+      shelljs.mkdir('-p', theme.destination);
+      shelljs.cp('-r', path.join(theme.location, '*'), theme.destination);
     }
   }
 
-  // copy image assets
-  const assets = await globby(entryContextDir, {
-    caseSensitiveMatch: false,
-    followSymbolicLinks: false,
-    gitignore: true,
-    expandDirectories: {
-      extensions: ['png', 'jpg', 'jpeg', 'svg', 'gif'],
-    },
-  });
-  debug('images', assets);
-  for (const asset of assets) {
-    const target = path.join(
-      artifactDir,
-      path.relative(entryContextDir, asset),
-    );
-    shelljs.mkdir('-p', path.dirname(target));
-    shelljs.cp(asset, target);
-  }
-
-  // copy cover
-  if (cover) {
-    const { ext } = path.parse(cover);
-    shelljs.cp(cover, path.join(distDir, `cover${ext}`));
+  // generate toc
+  if (generativeContentsEntry) {
+    const style = locateThemePath(workspaceDir, generativeContentsEntry.theme);
+    const tocString = generateTocHtml({
+      entries: contentEntries,
+      manifestPath,
+      distDir: path.dirname(generativeContentsEntry.target),
+      title: manifestAutoGenerate?.title,
+      tocTitle: generativeContentsEntry.title ?? TOC_TITLE,
+      style,
+    });
+    fs.writeFileSync(generativeContentsEntry.target, tocString);
   }
 
   // generate manifest
-  const manifestPath = path.join(distDir, 'manifest.json');
-  generateManifest(manifestPath, {
-    title: projectTitle,
-    author: projectAuthor,
-    language,
-    toc,
-    cover,
-    entries: entries.map((entry) => ({
-      title: entry.title,
-      path: path.relative(distDir, entry.target.path),
-    })),
-    modified: new Date().toISOString(),
-  });
-
-  // generate toc
-  if (toc) {
-    const distTocPath = path.join(distDir, 'toc.html');
-    if (typeof toc === 'string') {
-      shelljs.cp(contextResolve(entryContextDir, toc)!, distTocPath);
-    } else {
-      const tocString = generateToC(entries, distDir);
-      fs.writeFileSync(distTocPath, tocString);
-    }
+  if (manifestAutoGenerate) {
+    generateManifest(manifestPath, entryContextDir, {
+      ...manifestAutoGenerate,
+      language,
+      cover: cover && path.relative(entryContextDir, cover),
+      entries: entries.map((entry) => ({
+        title: entry.title,
+        path: path.relative(workspaceDir, entry.target),
+        encodingFormat:
+          !('type' in entry) ||
+          entry.type === 'text/markdown' ||
+          entry.type === 'text/html'
+            ? undefined
+            : entry.type,
+        rel: entry.rel,
+      })),
+      modified: new Date().toISOString(),
+    });
   }
-  return { manifestPath };
+}
+
+export async function copyAssets({
+  entryContextDir,
+  workspaceDir,
+  includeAssets,
+}: MergedConfig): Promise<void> {
+  if (entryContextDir === workspaceDir) {
+    return;
+  }
+  const relWorkspaceDir = path.relative(entryContextDir, workspaceDir);
+  const assets = await globby(includeAssets, {
+    cwd: entryContextDir,
+    ignore: relWorkspaceDir ? [path.join(relWorkspaceDir, '**/*')] : undefined,
+    caseSensitiveMatch: false,
+    followSymbolicLinks: false,
+    gitignore: true,
+  });
+  debug('assets', assets);
+  for (const asset of assets) {
+    const target = path.join(workspaceDir, asset);
+    shelljs.mkdir('-p', path.dirname(target));
+    shelljs.cp(path.resolve(entryContextDir, asset), target);
+  }
+}
+
+export function checkOverwriteViolation(
+  { entryContextDir, workspaceDir }: MergedConfig,
+  target: string,
+  fileInformation: string,
+) {
+  if (!path.relative(target, entryContextDir).startsWith('..')) {
+    throw new Error(
+      `${target} is set as output destination of ${fileInformation}, however, this output path will overwrite the manuscript file(s). Please specify other paths.`,
+    );
+  }
+  if (!path.relative(target, workspaceDir).startsWith('..')) {
+    throw new Error(
+      `${target} is set as output destination of ${fileInformation}, however, this output path will overwrite the working directory of Vivliostyle. Please specify other paths.`,
+    );
+  }
 }

@@ -135,15 +135,30 @@ export async function compile(
 
   const locateThemePath = (
     from: string,
-    theme?: ParsedTheme,
-  ): string | undefined => {
-    switch (theme?.type) {
-      case 'uri':
-        return theme.location;
-      case 'file':
-        return path.relative(from, theme.destination);
-      case 'package':
-        return path.relative(from, path.join(theme.destination, theme.style));
+    theme?: ParsedTheme | ParsedTheme[],
+  ): string[] | undefined => {
+    if (Array.isArray(theme)) {
+      return theme.map((t) => {
+        switch (t.type) {
+          case 'uri':
+            return t.location;
+          case 'file':
+            return path.relative(from, t.destination);
+          case 'package':
+            return path.relative(from, path.join(t.destination, t.style));
+        }
+      });
+    } else {
+      switch (theme?.type) {
+        case 'uri':
+          return [theme.location];
+        case 'file':
+          return [path.relative(from, theme.destination)];
+        case 'package':
+          return [
+            path.relative(from, path.join(theme.destination, theme.style)),
+          ];
+      }
     }
   };
 

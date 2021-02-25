@@ -33,7 +33,7 @@ import { debug, log, readJSON, touchTmpFile } from './util';
 export interface ManuscriptEntry {
   type: ManuscriptMediaType;
   title?: string;
-  theme?: ParsedTheme;
+  theme?: ParsedTheme[];
   source: string;
   target: string;
   rel?: string | string[];
@@ -42,7 +42,7 @@ export interface ManuscriptEntry {
 export interface ContentsEntry {
   rel: 'contents';
   title?: string;
-  theme?: ParsedTheme;
+  theme?: ParsedTheme[];
   target: string;
 }
 
@@ -159,14 +159,14 @@ function parseFileMetadata(
   type: ManuscriptMediaType,
   sourcePath: string,
   workspaceDir: string,
-): { title?: string; theme?: ParsedTheme } {
+): { title?: string; theme?: ParsedTheme[] } {
   const sourceDir = path.dirname(sourcePath);
   let title: string | undefined;
-  let theme: ParsedTheme | undefined;
+  let theme: ParsedTheme[] = [];
   if (type === 'text/markdown') {
     const file = processMarkdown(sourcePath);
     title = file.data.title;
-    theme = ThemeManager.parseTheme(file.data.theme, sourceDir, workspaceDir);
+    theme = ThemeManager.parseThemes(file.data.theme, sourceDir, workspaceDir);
   } else {
     const $ = cheerio.load(fs.readFileSync(sourcePath, 'utf8'));
     title = $('title')?.text() ?? undefined;

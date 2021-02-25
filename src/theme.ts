@@ -43,9 +43,9 @@ export interface PackageTheme {
  */
 export class ThemeManager extends Array<ParsedTheme> {
   // theme specified by the argument of cli
-  private cliTheme: ParsedTheme | undefined;
+  private cliThemes: ParsedTheme[] = [];
   // theme specified in the theme field of the vivliostyle.config.js
-  private configTheme: ParsedTheme | undefined;
+  private configThemes: ParsedTheme[] = [];
 
   /**
    * parse theme locator
@@ -159,12 +159,44 @@ export class ThemeManager extends Array<ParsedTheme> {
   }
 
   /**
+   *
+   * @param locators ["theme1","theme2"] | "theme" | undefined
+   * @param contextDir
+   * @param workspaceDir
+   */
+  static parseThemes(
+    locators: string[] | string | undefined,
+    contextDir: string,
+    workspaceDir: string,
+  ): ParsedTheme[] {
+    const themes: ParsedTheme[] = [];
+    if (Array.isArray(locators)) {
+      locators.forEach((locator) => {
+        const theme = ThemeManager.parseTheme(
+          locator,
+          contextDir,
+          workspaceDir,
+        );
+        if (theme) {
+          themes.push(theme);
+        }
+      });
+    } else {
+      const theme = ThemeManager.parseTheme(locators, contextDir, workspaceDir);
+      if (theme) {
+        themes.push(theme);
+      }
+    }
+    return themes;
+  }
+
+  /**
    * parse theme locator
    * @param locator "theme"
    * @param contextDir
    * @param workspaceDir
    */
-  static parseTheme(
+  private static parseTheme(
     locator: string | undefined,
     contextDir: string,
     workspaceDir: string,
@@ -192,6 +224,15 @@ export class ThemeManager extends Array<ParsedTheme> {
   }
 
   /**
+   *
+   * @param themes
+   * @private
+   */
+  private addThemes(themes: ParsedTheme[]): void {
+    themes.map((t) => this.addTheme(t));
+  }
+
+  /**
    * theme from vivliostyle.config.js
    * @param config
    * @param contextDir
@@ -203,10 +244,8 @@ export class ThemeManager extends Array<ParsedTheme> {
     workspaceDir: string,
   ) {
     if (config) {
-      this.configTheme = ThemeManager.parseTheme(
-        config.theme,
-        contextDir,
-        workspaceDir,
+      this.configThemes = this.configThemes.concat(
+        ThemeManager.parseThemes(config.theme, contextDir, workspaceDir),
       );
     }
   }
@@ -217,11 +256,14 @@ export class ThemeManager extends Array<ParsedTheme> {
    * @param workspaceDir
    */
   setCliTheme(cliFlags: CliFlags, workspaceDir: string) {
-    this.cliTheme = ThemeManager.parseTheme(
+    const themes = ThemeManager.parseThemes(
       cliFlags.theme,
       process.cwd(),
       workspaceDir,
     );
+    if (themes) {
+      this.cliThemes = this.cliThemes.concat(themes);
+    }
   }
 
   /**
@@ -232,27 +274,39 @@ export class ThemeManager extends Array<ParsedTheme> {
    * @param workspaceDir
    */
   resolveEntryTheme(
-    metadata: { title?: string; theme?: ParsedTheme },
+    metadata: { title?: string; theme?: ParsedTheme[] },
     entry: EntryObject | ContentsEntryObject | undefined,
     contextDir: string,
     workspaceDir: string,
-  ): ParsedTheme | undefined {
-    const theme =
-      ThemeManager.parseTheme(entry?.theme, contextDir, workspaceDir) ??
-      metadata.theme ??
-      this.rootTheme();
-    this.addTheme(theme);
-    return theme;
+  ): ParsedTheme[] {
+    const entryThemes = ThemeManager.parseThemes(
+      entry?.theme,
+      contextDir,
+      workspaceDir,
+    );
+    const themes =
+      entryThemes.length != 0
+        ? entryThemes
+        : metadata.theme && metadata.theme?.length != 0
+        ? metadata.theme
+        : this.rootTheme();
+    this.addThemes(themes);
+    return themes;
   }
 
   /**
    * theme specified in the CLI or config
    * @return array of themes
    */
-  rootTheme(): ParsedTheme | undefined {
-    const theme = this.cliTheme ?? this.configTheme;
-    this.addTheme(theme);
-    return theme;
+  rootTheme(): ParsedTheme[] {
+    const themes =
+      this.cliThemes.length != 0
+        ? this.cliThemes
+        : this.configThemes.length != 0
+        ? this.configThemes
+        : [];
+    this.addThemes(themes);
+    return themes;
   }
 
   /**
@@ -267,12 +321,15 @@ export class ThemeManager extends Array<ParsedTheme> {
     entry: EntryObject | ContentsEntryObject,
     context: string,
     workspaceDir: string,
-  ): ParsedTheme | undefined {
-    const theme =
-      ThemeManager.parseTheme(entry.theme, context, workspaceDir) ??
-      this.rootTheme();
-    this.addTheme(theme);
-    return theme;
+  ): ParsedTheme[] {
+    const entryThemes = ThemeManager.parseThemes(
+      entry.theme,
+      context,
+      workspaceDir,
+    );
+    const themes = entryThemes.length != 0 ? entryThemes : this.rootTheme();
+    this.addThemes(themes);
+    return themes;
   }
 
   /**
@@ -281,11 +338,14 @@ export class ThemeManager extends Array<ParsedTheme> {
    */
   singleInputTheme(metadata: {
     title?: string;
-    theme?: ParsedTheme;
-  }): ParsedTheme | undefined {
-    const theme = metadata.theme ?? this.rootTheme();
-    this.addTheme(theme);
-    return theme;
+    theme?: ParsedTheme[];
+  }): ParsedTheme[] {
+    const themes =
+      metadata.theme && metadata.theme.length != 0
+        ? metadata.theme
+        : this.rootTheme();
+    this.addThemes(themes);
+    return themes;
   }
 
   /**

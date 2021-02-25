@@ -15,6 +15,7 @@ export interface UriTheme {
   type: 'uri';
   name: string;
   location: string;
+  replace?: string;
 }
 
 export interface FileTheme {
@@ -22,6 +23,7 @@ export interface FileTheme {
   name: string;
   location: string;
   destination: string;
+  replace?: string;
 }
 
 export interface PackageTheme {
@@ -30,6 +32,7 @@ export interface PackageTheme {
   location: string;
   destination: string;
   style: string;
+  replace?: string;
 }
 
 /**
@@ -47,6 +50,11 @@ export class ThemeManager extends Array<ParsedTheme> {
   // theme specified in the theme field of the vivliostyle.config.js
   private configThemes: ParsedTheme[] = [];
 
+  private static parseReplaceLocator(packageJson: any): string | undefined {
+    const replace = packageJson?.vivliostyle?.theme?.replace ?? undefined;
+    return replace;
+  }
+
   /**
    * parse theme locator
    * 1. specified in the theme field of the vivliostyle.config.js
@@ -60,7 +68,9 @@ export class ThemeManager extends Array<ParsedTheme> {
   private static parseStyleLocator(
     pkgRootDir: string,
     locator: string,
-  ): { name: string; maybeStyle: string } | undefined {
+  ):
+    | { name: string; maybeStyle: string; replace: string | undefined }
+    | undefined {
     const pkgJsonPath = path.join(pkgRootDir, 'package.json');
     if (!fs.existsSync(pkgJsonPath)) {
       return undefined;
@@ -78,7 +88,10 @@ export class ThemeManager extends Array<ParsedTheme> {
         `invalid style file: ${maybeStyle} while parsing ${locator}`,
       );
     }
-    return { name: packageJson.name, maybeStyle };
+
+    const replace = ThemeManager.parseReplaceLocator(packageJson);
+
+    return { name: packageJson.name, maybeStyle, replace };
   }
 
   /**
@@ -129,6 +142,7 @@ export class ThemeManager extends Array<ParsedTheme> {
           location: location,
           destination: path.join(workspaceDir, 'themes/packages', style.name),
           style: style.maybeStyle,
+          replace: style.replace,
         };
         return theme;
       }

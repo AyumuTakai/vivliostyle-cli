@@ -1,3 +1,4 @@
+import { ReplaceRule } from '@vivliostyle/vfm/lib/plugins/replace';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import chalk from 'chalk';
@@ -108,6 +109,39 @@ export function generateManifest(
   }
 }
 
+function clearReplaceCache(entries: ManuscriptEntry[]) {
+  for (const entry of entries) {
+    if (!entry.theme || entry.theme.length == 0) continue;
+    for (const theme of entry.theme) {
+      if (theme.replace) {
+        const replaceFile = path.join(theme.location, theme.replace);
+        delete require.cache[replaceFile];
+      }
+    }
+  }
+}
+
+function importReplaceRules(entry: ManuscriptEntry): ReplaceRule[] | undefined {
+  if (!entry.theme || entry.theme.length == 0) return;
+  let replaceRules: ReplaceRule[] | undefined = undefined;
+  for (const theme of entry.theme) {
+    if (theme.replace) {
+      const replaceFile = path.join(theme.location, theme.replace);
+      if (fs.existsSync(replaceFile)) {
+        const replaces: ReplaceRule[] | undefined = require(replaceFile)
+          .replaces as ReplaceRule[] | undefined;
+        if (replaces && replaces.length > 0) {
+          if (!replaceRules) {
+            replaceRules = [];
+          }
+          replaceRules = replaceRules?.concat(replaces);
+        }
+      }
+    }
+  }
+  return replaceRules;
+}
+
 export async function compile(
   {
     entryContextDir,
@@ -178,17 +212,23 @@ export async function compile(
   const contentEntries = entries.filter(
     (e): e is ManuscriptEntry => 'source' in e,
   );
+
+  // clear cache if replace.js
+  clearReplaceCache(contentEntries);
+
   for (const entry of contentEntries) {
     shelljs.mkdir('-p', path.dirname(entry.target));
 
     // calculate style path
     const style = locateThemePath(path.dirname(entry.target), entry.theme);
     if (entry.type === 'text/markdown') {
+      const replaceRules = importReplaceRules(entry);
       // compile markdown
       const vfile = processMarkdown(entry.source, {
         style,
         title: entry.title,
         language: language ?? undefined,
+        replace: replaceRules,
       });
       const compiledEntry = String(vfile);
       fs.writeFileSync(entry.target, compiledEntry);

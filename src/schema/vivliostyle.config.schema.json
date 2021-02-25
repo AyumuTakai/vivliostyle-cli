@@ -64,6 +64,12 @@
           "description": "Theme package path or URL of css file.",
           "anyOf": [
             {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
               "type": "string",
               "maxLength": 214,
               "minLength": 1,

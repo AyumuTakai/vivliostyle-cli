@@ -10,7 +10,6 @@ import path from 'upath';
 import {
   ManuscriptEntry,
   MergedConfig,
-  ParsedTheme,
   WebPublicationManifestConfig,
 } from './config';
 import { TOC_TITLE } from './const';
@@ -25,6 +24,7 @@ import {
   publicationSchemas,
 } from './schema/pubManifest.schema';
 import type { EntryObject } from './schema/vivliostyle.config';
+import { ParsedTheme, ThemeManager } from './theme';
 import { debug, log } from './util';
 
 export function cleanup(location: string) {
@@ -198,17 +198,7 @@ export async function compile(
   }
 
   // copy theme
-  for (const theme of themeIndexes) {
-    if (theme.type === 'file') {
-      if (theme.location !== theme.destination) {
-        shelljs.mkdir('-p', path.dirname(theme.destination));
-        shelljs.cp(theme.location, theme.destination);
-      }
-    } else if (theme.type === 'package') {
-      shelljs.mkdir('-p', theme.destination);
-      shelljs.cp('-r', path.join(theme.location, '*'), theme.destination);
-    }
-  }
+  (themeIndexes as ThemeManager).copyThemes();
 
   // generate toc
   if (generativeContentsEntry) {

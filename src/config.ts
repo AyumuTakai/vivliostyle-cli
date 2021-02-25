@@ -5,7 +5,6 @@ import cheerio from 'cheerio';
 import fs from 'fs';
 import process from 'process';
 import puppeteer from 'puppeteer';
-import resolvePkg from 'resolve-pkg';
 import path from 'upath';
 import { MANIFEST_FILENAME, TOC_FILENAME, TOC_TITLE } from './const';
 import { openEpubToTmpDirectory } from './epub';
@@ -28,30 +27,8 @@ import type {
 } from './schema/vivliostyle.config';
 import configSchema from './schema/vivliostyle.config.schema.json';
 import { PageSize } from './server';
+import { ParsedTheme, ThemeManager } from './theme';
 import { debug, log, readJSON, touchTmpFile } from './util';
-
-export type ParsedTheme = UriTheme | FileTheme | PackageTheme;
-
-export interface UriTheme {
-  type: 'uri';
-  name: string;
-  location: string;
-}
-
-export interface FileTheme {
-  type: 'file';
-  name: string;
-  location: string;
-  destination: string;
-}
-
-export interface PackageTheme {
-  type: 'package';
-  name: string;
-  location: string;
-  destination: string;
-  style: string;
-}
 
 export interface ManuscriptEntry {
   type: ManuscriptMediaType;
@@ -162,76 +139,6 @@ function normalizeEntry(
   return { path: e };
 }
 
-// parse theme locator
-export function parseTheme(
-  locator: string | undefined,
-  contextDir: string,
-  workspaceDir: string,
-): ParsedTheme | undefined {
-  if (typeof locator !== 'string' || locator == '') {
-    return undefined;
-  }
-
-  // url
-  if (/^https?:\/\//.test(locator)) {
-    return {
-      type: 'uri',
-      name: path.basename(locator),
-      location: locator,
-    };
-  }
-
-  const stylePath = path.resolve(contextDir, locator);
-
-  // node_modules, local pkg
-  const pkgRootDir = resolvePkg(locator, { cwd: contextDir });
-  if (!pkgRootDir?.endsWith('.css')) {
-    const style = parseStyleLocator(pkgRootDir ?? stylePath, locator);
-    if (style) {
-      return {
-        type: 'package',
-        name: style.name,
-        location: pkgRootDir ?? stylePath,
-        destination: path.join(workspaceDir, 'themes/packages', style.name),
-        style: style.maybeStyle,
-      };
-    }
-  }
-
-  // bare .css file
-  const sourceRelPath = path.relative(contextDir, stylePath);
-  return {
-    type: 'file',
-    name: path.basename(locator),
-    location: stylePath,
-    destination: path.resolve(workspaceDir, sourceRelPath),
-  };
-}
-
-function parseStyleLocator(
-  pkgRootDir: string,
-  locator: string,
-): { name: string; maybeStyle: string } | undefined {
-  const pkgJsonPath = path.join(pkgRootDir, 'package.json');
-  if (!fs.existsSync(pkgJsonPath)) {
-    return undefined;
-  }
-
-  const packageJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
-
-  const maybeStyle =
-    packageJson?.vivliostyle?.theme?.style ??
-    packageJson.style ??
-    packageJson.main;
-
-  if (!maybeStyle) {
-    throw new Error(
-      `invalid style file: ${maybeStyle} while parsing ${locator}`,
-    );
-  }
-  return { name: packageJson.name, maybeStyle };
-}
-
 function parsePageSize(size: string): PageSize {
   const [width, height, ...others] = `${size}`.split(',');
   if (others.length) {
@@ -259,7 +166,7 @@ function parseFileMetadata(
   if (type === 'text/markdown') {
     const file = processMarkdown(sourcePath);
     title = file.data.title;
-    theme = parseTheme(file.data.theme, sourceDir, workspaceDir);
+    theme = ThemeManager.parseTheme(file.data.theme, sourceDir, workspaceDir);
   } else {
     const $ = cheerio.load(fs.readFileSync(sourcePath, 'utf8'));
     title = $('title')?.text() ?? undefined;
@@ -363,13 +270,9 @@ export async function mergeConfig<T extends CliFlags>(
   const executableChromium =
     cliFlags.executableChromium ?? puppeteer.executablePath();
 
-  const themeIndexes: ParsedTheme[] = [];
-  const rootTheme =
-    parseTheme(cliFlags.theme, process.cwd(), workspaceDir) ??
-    parseTheme(config?.theme, context, workspaceDir);
-  if (rootTheme) {
-    themeIndexes.push(rootTheme);
-  }
+  const themeIndexes = new ThemeManager();
+  themeIndexes.setCliTheme(cliFlags, workspaceDir);
+  themeIndexes.setConfigTheme(config, context, workspaceDir);
 
   const outputs = ((): OutputFormat[] => {
     if (cliFlags.targets?.length) {
@@ -488,7 +391,9 @@ async function composeSingleInputConfig<T extends CliFlags>(
       source: sourcePath,
       target,
       title: metadata.title,
-      theme: metadata.theme ?? otherConfig.themeIndexes[0],
+      theme: (otherConfig.themeIndexes as ThemeManager).singleInputTheme(
+        metadata,
+      ),
     });
     exportAliases.push({
       source: target,
@@ -554,7 +459,7 @@ async function composeProjectConfig<T extends CliFlags>(
 ): Promise<MergedConfig> {
   debug('entering project config mode');
 
-  const { entryContextDir, workspaceDir, themeIndexes, outputs } = otherConfig;
+  const { entryContextDir, workspaceDir, outputs } = otherConfig;
   const pkgJsonPath = path.resolve(context, 'package.json');
   const pkgJson = fs.existsSync(pkgJsonPath)
     ? readJSON(pkgJsonPath)
@@ -575,16 +480,15 @@ async function composeProjectConfig<T extends CliFlags>(
 
   function parseEntry(entry: EntryObject | ContentsEntryObject): ParsedEntry {
     if (!('path' in entry)) {
-      const theme =
-        parseTheme(entry.theme, context, workspaceDir) ?? themeIndexes[0];
-      if (theme && themeIndexes.every((t) => t.location !== theme.location)) {
-        themeIndexes.push(theme);
-      }
       return {
         rel: 'contents',
         target: autoGeneratedTocPath,
         title: entry.title ?? config?.tocTitle ?? TOC_TITLE,
-        theme,
+        theme: (otherConfig.themeIndexes as ThemeManager).tocTheme(
+          entry,
+          context,
+          workspaceDir,
+        ),
       } as ContentsEntry;
     }
     const sourcePath = path.resolve(entryContextDir, entry.path); // abs
@@ -596,14 +500,12 @@ async function composeProjectConfig<T extends CliFlags>(
     const metadata = parseFileMetadata(type, sourcePath, workspaceDir);
 
     const title = entry.title ?? metadata.title ?? projectTitle;
-    const theme =
-      parseTheme(entry.theme, context, workspaceDir) ??
-      metadata.theme ??
-      themeIndexes[0];
-
-    if (theme && themeIndexes.every((t) => t.location !== theme.location)) {
-      themeIndexes.push(theme);
-    }
+    const theme = (otherConfig.themeIndexes as ThemeManager).resolveEntryTheme(
+      metadata,
+      entry,
+      context,
+      workspaceDir,
+    );
 
     return {
       type,
@@ -646,7 +548,7 @@ async function composeProjectConfig<T extends CliFlags>(
       rel: 'contents',
       target: autoGeneratedTocPath,
       title: config?.tocTitle ?? TOC_TITLE,
-      theme: themeIndexes[0],
+      theme: (otherConfig.themeIndexes as ThemeManager).rootTheme(),
     });
   }
 

@@ -1,5 +1,26 @@
 {
   "definitions": {
+    "theme": {
+      "description": "Theme package path or URL of css file.",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string",
+          "maxLength": 214,
+          "minLength": 1,
+          "pattern": "^(?:@[a-z0-9-*~][a-z0-9-*._~]*/)?[a-z0-9-~][a-z0-9-._~]*$"
+        },
+        {
+          "type": "string",
+          "pattern": "^.+/[^/]+(.css|\\w)$"
+        }
+      ]
+    },
     "entry": {
       "type": "string",
       "minLength": 1
@@ -9,7 +30,7 @@
       "properties": {
         "path": { "type": "string" },
         "title": { "type": "string" },
-        "theme": { "type": "string" },
+        "theme": { "$ref": "#/definitions/theme" },
         "encodingFormat": { "type": "string" },
         "rel": {
           "type": ["string", "array"],
@@ -60,27 +81,7 @@
           "description": "Author",
           "minLength": 1
         },
-        "theme": {
-          "description": "Theme package path or URL of css file.",
-          "anyOf": [
-            {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            {
-              "type": "string",
-              "maxLength": 214,
-              "minLength": 1,
-              "pattern": "^(?:@[a-z0-9-*~][a-z0-9-*._~]*/)?[a-z0-9-~][a-z0-9-._~]*$"
-            },
-            {
-              "type": "string",
-              "pattern": "^.+/[^/]+(.css|\\w)$"
-            }
-          ]
-        },
+        "theme": { "$ref": "#/definitions/theme" },
         "entry": {
           "oneOf": [
             {

@@ -1,0 +1,22 @@
+{
+  "name": "textlint",
+  "version": "1.0.0",
+  "description": "vivliostyle textlint plugin.",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "textlint": "^11.8.2",
+    "textlint-rule-joyo-kanji": "^0.0.2"
+  },
+  "vivliostyle": {
+    "theme": {
+      "name": "Textlint plugin",
+      "style": "./theme.css",
+      "category": "replace",
+      "replace": "scripts.js",
+      "topics": [
+        "リプレイス","校正","TextLint"
+      ]
+    }
+  }
+}

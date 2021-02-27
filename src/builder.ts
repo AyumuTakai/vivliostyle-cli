@@ -142,6 +142,32 @@ function importReplaceRules(entry: ManuscriptEntry): ReplaceRule[] | undefined {
   return replaceRules;
 }
 
+function importPreprocess(
+  entry: ManuscriptEntry,
+): ((contents: string) => string)[] | undefined {
+  if (!entry.theme || entry.theme.length == 0) return;
+  let preProcess: ((contents: string) => string)[] | undefined = undefined;
+  for (const theme of entry.theme) {
+    if (theme.replace) {
+      const replaceFile = path.join(theme.location, theme.replace);
+      if (fs.existsSync(replaceFile)) {
+        const procs:
+          | ((contents: string) => string)[]
+          | undefined = require(replaceFile).preprocess as
+          | ((contents: string) => string)[]
+          | undefined;
+        if (procs && procs.length > 0) {
+          if (!preProcess) {
+            preProcess = [];
+          }
+          preProcess = preProcess?.concat(procs);
+        }
+      }
+    }
+  }
+  return preProcess;
+}
+
 export async function compile(
   {
     entryContextDir,
@@ -223,13 +249,18 @@ export async function compile(
     const style = locateThemePath(path.dirname(entry.target), entry.theme);
     if (entry.type === 'text/markdown') {
       const replaceRules = importReplaceRules(entry);
+      const preprocess = importPreprocess(entry);
       // compile markdown
-      const vfile = processMarkdown(entry.source, {
-        style,
-        title: entry.title,
-        language: language ?? undefined,
-        replace: replaceRules,
-      });
+      const vfile = await processMarkdown(
+        entry.source,
+        {
+          style,
+          title: entry.title,
+          language: language ?? undefined,
+          replace: replaceRules,
+        },
+        preprocess,
+      );
       const compiledEntry = String(vfile);
       fs.writeFileSync(entry.target, compiledEntry);
     } else if (

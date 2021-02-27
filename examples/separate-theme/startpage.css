@@ -1,0 +1,3 @@
+@page:nth(1){
+    counter-reset: page 0;
+}

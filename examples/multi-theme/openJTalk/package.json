@@ -1,0 +1,23 @@
+{
+  "name": "openjtalk_plugin",
+  "version": "1.0.0",
+  "description": "vivliostyle OpenJTalk plugin.",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "openjtalk": "^0.1.6"
+  },
+  "vivliostyle": {
+    "theme": {
+      "name": "OpenJTalk plugin",
+      "style": "./theme.css",
+      "category": "replace",
+      "replace": "scripts.js",
+      "topics": [
+        "リプレイス",
+        "校正",
+        "OpenJTalk"
+      ]
+    }
+  }
+}

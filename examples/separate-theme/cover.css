@@ -1,0 +1,27 @@
+@page :nth(1) {
+    margin: 0;
+    background-image: url("cover.jpeg");
+    background-size: cover;
+    @top-right {
+        content: none;
+    }
+    @bottom-right {
+        content: none;
+    }
+}
+
+@page :nth(2) {
+    margin: 0;
+    @top-left {
+        content: none;
+    }
+    @bottom-left {
+        content: none;
+    }
+}
+
+h1 {
+    font-size: 2.5em;
+    color: white;
+    text-align: center;
+}

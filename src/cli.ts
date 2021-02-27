@@ -2,8 +2,8 @@
 
 import program from 'commander';
 import fs from 'fs';
-import { join } from 'upath';
 import resolvePkg from 'resolve-pkg';
+import { join } from 'upath';
 import { readJSON } from './util';
 
 const { version: cliVersion } = readJSON(join(__dirname, '../package.json'));

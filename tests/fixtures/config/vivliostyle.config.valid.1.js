@@ -1,7 +1,7 @@
 module.exports = {
   title: 'title',
   author: 'author',
-  theme: 'debug-theme',
+  theme: '../themes/debug-theme',
   entry: [
     'manuscript.md',
     {
@@ -24,4 +24,5 @@ module.exports = {
   toc: './toc.html',
   cover: './cover.png',
   timeout: 1,
+  workspaceDir: 'workspaceDir',
 };

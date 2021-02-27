@@ -7,12 +7,13 @@ import { InitCliFlags, setupInitParserProgram } from './init.parser';
 try {
   const program = setupInitParserProgram();
   program.parse(process.argv);
+  const options = program.opts();
   init({
-    title: program.title,
-    author: program.author,
-    language: program.language,
-    size: program.size,
-    theme: program.theme,
+    title: options.title,
+    author: options.author,
+    language: options.language,
+    size: options.size,
+    theme: options.theme,
   }).catch(gracefulError);
 } catch (err) {
   gracefulError(err);
@@ -32,11 +33,11 @@ export default async function init(cliFlags: InitCliFlags) {
 
   // prettier-ignore
   const vivliostyleConfig = `module.exports = {
-  title: '${ cliFlags.title || 'Principia'}', // populated into 'manifest.json', default to 'title' of the first entry or 'name' in 'package.json'.
+  title: '${ cliFlags.title || 'Principia'}', // populated into 'publication.json', default to 'title' of the first entry or 'name' in 'package.json'.
   author: '${cliFlags.author || 'Isaac Newton'}', // default to 'author' in 'package.json' or undefined
-  ${cliFlags.language ? '' : '// '}language: '${cliFlags.language || 'la'}', // default to 'en'
+  ${cliFlags.language ? '' : '// '}language: '${cliFlags.language || 'la'}',
   ${cliFlags.size ? '' : '// '}size: '${cliFlags.size || 'A4'}',
-  theme: '${cliFlags.theme || ''}', // .css or local dir or npm package. default to undefined
+  ${cliFlags.theme ? '' : '// '}theme: '${cliFlags.theme || ''}', // .css or local dir or npm package. default to undefined
   entry: [ // **required field**
     // 'introduction.md', // 'title' is automatically guessed from the file (frontmatter > first heading)
     // {
@@ -47,14 +48,15 @@ export default async function init(cliFlags: InitCliFlags) {
     // 'glossary.html' // html is also acceptable
   ], // 'entry' can be 'string' or 'object' if there's only single markdown file
   // entryContext: './manuscripts', // default to '.' (relative to 'vivliostyle.config.js')
-  // outputs: [ // path to generate draft file(s). default to '{title}.pdf'
+  // output: [ // path to generate draft file(s). default to '{title}.pdf'
   //   './output.pdf', // the output format will be inferred from the name.
   //   {
   //     path: './book',
-  //     format: 'webbook',
+  //     format: 'webpub',
   //   },
   // ],
-  // toc: true, // whether generate and include toc.html or not (does not affect manifest.json), default to 'false'. if 'string' given, use it as a custom toc.html.
+  // workspaceDir: '.vivliostyle', // directory which is saved intermediate files.
+  // toc: true, // whether generate and include ToC HTML or not, default to 'false'.
   // cover: './cover.png', // cover image. default to undefined.
 };
 `;

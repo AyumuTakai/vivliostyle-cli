@@ -1,11 +1,10 @@
 import commander from 'commander';
+import { CliFlags, validateTimeoutFlag } from '../config';
 import {
   availableOutputFormat,
-  CliFlags,
-  inferenceFormatByName,
+  detectOutputFormat,
   OutputFormat,
-  validateTimeoutFlag,
-} from '../config';
+} from '../output';
 
 export interface BuildCliFlags extends CliFlags {
   output?: {
@@ -60,7 +59,7 @@ export function setupBuildParserProgram(): commander.Command {
       '-o, --output <path>',
       `specify output file name or directory [<title>.pdf]
 This option can be specified multiple, then each -o options can be supplied one -f option.
-ex: -o output1 -f webbook -o output2.pdf -f pdf`,
+ex: -o output1 -f webpub -o output2.pdf -f pdf`,
       outputOptionProcessor,
     )
     .option(
@@ -69,7 +68,6 @@ ex: -o output1 -f webbook -o output2.pdf -f pdf`,
 If an extension is specified on -o option, this field will be inferenced automatically.`,
       formatOptionProcessor,
     )
-    .option('-t, --theme <theme>', 'theme path or package name')
     .option(
       '-s, --size <size>',
       `output pdf size [Letter]
@@ -80,15 +78,16 @@ custom(comma separated): 182mm,257mm or 8.5in,11in`,
       '-p, --press-ready',
       `make generated PDF compatible with press ready PDF/X-1a [false]`,
     )
-    .option('--title <title>', 'title')
-    .option('--author <author>', 'author')
-    .option('--language <language>', 'language')
-    .option('--verbose', 'verbose log output')
     .option(
-      '--timeout <seconds>',
+      '-t, --timeout <seconds>',
       `timeout limit for waiting Vivliostyle process [60s]`,
       validateTimeoutFlag,
     )
+    .option('-T, --theme <theme>', 'theme path or package name')
+    .option('--title <title>', 'title')
+    .option('--author <author>', 'author')
+    .option('-l, --language <language>', 'language')
+    .option('--verbose', 'verbose log output')
     .option(
       '--no-sandbox',
       `launch chrome without sandbox. use this option when ECONNREFUSED error occurred.`,
@@ -109,10 +108,7 @@ export function inferenceTargetsOption(
     output?: string;
     format?: string;
   }[],
-): {
-  output: string;
-  format: OutputFormat;
-}[] {
+): OutputFormat[] {
   return parsed.map(({ output, format }) => {
     if (!output) {
       // -f is an optional option but -o is required one
@@ -121,10 +117,14 @@ export function inferenceTargetsOption(
       );
     }
     if (!format) {
-      format = inferenceFormatByName(output);
-    } else if (!availableOutputFormat.includes(format as OutputFormat)) {
+      return detectOutputFormat(output);
+    } else if (
+      !availableOutputFormat.includes(
+        format as typeof availableOutputFormat[number],
+      )
+    ) {
       throw new Error(`Unknown format: ${format}`);
     }
-    return { output, format: format as OutputFormat };
+    return { path: output, format } as OutputFormat;
   });
 }

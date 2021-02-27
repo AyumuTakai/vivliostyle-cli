@@ -57,7 +57,7 @@ it('generate pdf with scss theme without errors', async () => {
       '-o',
       outputPath,
       '-c',
-      'theme.vivliostyle.config.js',
+      'package.vivliostyle.config.js',
     ]);
     expect(response.stdout).toContain('has been created');
   } catch (err) {
@@ -73,7 +73,7 @@ it('preview theme', async () => {
   // const subprocess = vivliostyleCLI([
   //   'preview',
   //   '-c',
-  //   'theme.vivliostyle.config.js',
+  //   'package.vivliostyle.config.js',
   // ]);
   // setTimeout(() => {
   //   subprocess.cancel();

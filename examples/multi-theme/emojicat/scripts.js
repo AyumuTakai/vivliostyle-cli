@@ -1,3 +1,7 @@
+/**
+ * リプレイス機能
+ * @type {{test: RegExp, match: (function([], *): *)}[]}
+ */
 exports.replaces = [
   {
     test: /猫/g,

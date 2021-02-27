@@ -1,0 +1,7 @@
+section section section {
+    columns: 2;
+    column-rule: 1px dotted #cdcdcd;
+    column-gap: 3em;
+    column-fill: auto;
+    max-height: 100%;
+}

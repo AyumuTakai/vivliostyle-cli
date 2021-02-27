@@ -35,6 +35,7 @@ export interface CoreProps {
   cover?: string;
   timeout?: number;
   [k: string]: unknown;
+  theme_vars?: any;
 }
 export interface EntryObject {
   path: string;

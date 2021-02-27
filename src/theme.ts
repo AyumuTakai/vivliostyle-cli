@@ -8,6 +8,7 @@ import {
   EntryObject,
   VivliostyleConfigSchema,
 } from './schema/vivliostyle.config';
+const sass = require('sass');
 
 export type ParsedTheme = UriTheme | FileTheme | PackageTheme;
 
@@ -15,6 +16,7 @@ export interface UriTheme {
   type: 'uri';
   name: string;
   location: string;
+  vars?: any | undefined;
 }
 
 export interface FileTheme {
@@ -22,6 +24,7 @@ export interface FileTheme {
   name: string;
   location: string;
   destination: string;
+  vars?: any | undefined;
 }
 
 export interface PackageTheme {
@@ -30,6 +33,7 @@ export interface PackageTheme {
   location: string;
   destination: string;
   style: string;
+  vars?: any | undefined;
 }
 
 /**
@@ -95,12 +99,16 @@ export class ThemeManager extends Array<ParsedTheme> {
    * @param locator
    * @private
    */
-  private static parseURL(locator: string) {
+  private static parseURL(
+    locator: string,
+    themeVars: any | undefined = undefined,
+  ) {
     if (ThemeManager.isURL(locator)) {
       const theme: UriTheme = {
         type: 'uri',
         name: path.basename(locator),
         location: locator,
+        vars: themeVars,
       };
       return theme;
     }
@@ -117,6 +125,7 @@ export class ThemeManager extends Array<ParsedTheme> {
     locator: string,
     contextDir: string,
     workspaceDir: string,
+    themeVars: any | undefined = undefined,
   ): ParsedTheme | undefined {
     const pkgRootDir = resolvePkg(locator, { cwd: contextDir });
     if (!pkgRootDir?.endsWith('.css')) {
@@ -129,6 +138,7 @@ export class ThemeManager extends Array<ParsedTheme> {
           location: location,
           destination: path.join(workspaceDir, 'themes/packages', style.name),
           style: style.maybeStyle,
+          vars: themeVars,
         };
         return theme;
       }
@@ -146,6 +156,7 @@ export class ThemeManager extends Array<ParsedTheme> {
     locator: string,
     contextDir: string,
     workspaceDir: string,
+    themeVars: any | undefined = undefined,
   ): ParsedTheme | undefined {
     const stylePath = path.resolve(contextDir, locator);
     const sourceRelPath = path.relative(contextDir, stylePath);
@@ -154,6 +165,7 @@ export class ThemeManager extends Array<ParsedTheme> {
       name: path.basename(locator),
       location: stylePath,
       destination: path.resolve(workspaceDir, sourceRelPath),
+      vars: themeVars,
     };
     return theme;
   }
@@ -168,6 +180,7 @@ export class ThemeManager extends Array<ParsedTheme> {
     locators: string[] | string | undefined,
     contextDir: string,
     workspaceDir: string,
+    themeVars: any | undefined = undefined,
   ): ParsedTheme[] {
     const themes: ParsedTheme[] = [];
     if (Array.isArray(locators)) {
@@ -182,7 +195,12 @@ export class ThemeManager extends Array<ParsedTheme> {
         }
       });
     } else {
-      const theme = ThemeManager.parseTheme(locators, contextDir, workspaceDir);
+      const theme = ThemeManager.parseTheme(
+        locators,
+        contextDir,
+        workspaceDir,
+        themeVars,
+      );
       if (theme) {
         themes.push(theme);
       }
@@ -200,15 +218,21 @@ export class ThemeManager extends Array<ParsedTheme> {
     locator: string | undefined,
     contextDir: string,
     workspaceDir: string,
+    themeVars: any | undefined = undefined,
   ): ParsedTheme | undefined {
     if (typeof locator !== 'string' || locator == '') {
       return undefined;
     }
 
     return (
-      ThemeManager.parseURL(locator) ?? // url
-      ThemeManager.parseModules(locator, contextDir, workspaceDir) ?? // node_modules, local pkg
-      ThemeManager.parseBareCssFile(locator, contextDir, workspaceDir)
+      ThemeManager.parseURL(locator, themeVars) ?? // url
+      ThemeManager.parseModules(locator, contextDir, workspaceDir, themeVars) ?? // node_modules, local pkg
+      ThemeManager.parseBareCssFile(
+        locator,
+        contextDir,
+        workspaceDir,
+        themeVars,
+      )
     ); // bare .css file
   }
 
@@ -242,10 +266,16 @@ export class ThemeManager extends Array<ParsedTheme> {
     config: VivliostyleConfigSchema | undefined,
     contextDir: string,
     workspaceDir: string,
+    themeVars: any | undefined = undefined,
   ) {
     if (config) {
       this.configThemes = this.configThemes.concat(
-        ThemeManager.parseThemes(config.theme, contextDir, workspaceDir),
+        ThemeManager.parseThemes(
+          config.theme,
+          contextDir,
+          workspaceDir,
+          themeVars,
+        ),
       );
     }
   }
@@ -349,18 +379,64 @@ export class ThemeManager extends Array<ParsedTheme> {
   }
 
   /**
+   * sass(scss)をトランスパイルする
+   * 生成したCSSの場所によってurl()の指定がずれてしまう
+   * @param src 元ファイル
+   * @param dst 保存先ファイル名
+   * @param vars 上書きする変数
+   */
+  private transpileSass(src: string, dst: string, vars: any = null) {
+    // 変数を上書きするために "with ( $name1:value1,$name2:value2, ... )"という文字列を作る
+    let with_vars: string = '';
+    if (vars && Object.keys(vars).length > 0) {
+      with_vars = ' with (';
+      for (let key in vars) {
+        with_vars += `$${key}:${vars[key]},`;
+      }
+      with_vars = with_vars.slice(0, -1) + ')'; // 最後の,を取り除く
+    }
+
+    const result = sass.renderSync({
+      // file: src,
+      data: `@use '${src}' ${with_vars};`,
+      outputStyle: 'expanded',
+      outFile: dst,
+    });
+    fs.promises
+      .mkdir(path.dirname(dst), { recursive: true })
+      .then(() => {
+        fs.writeFileSync(dst, result.css);
+      })
+      .catch(console.error);
+  }
+  /**
    * copy style files to destination
    */
-  copyThemes(): void {
+  public copyThemes(): void {
     for (const theme of this) {
       if (theme.type === 'file') {
-        if (theme.location !== theme.destination) {
-          shelljs.mkdir('-p', path.dirname(theme.destination));
-          shelljs.cp(theme.location, theme.destination);
+        if (theme.name.endsWith('.scss')) {
+          const vars = theme.vars;
+          theme.destination = theme.destination.replace(/\.scss$/, '.css');
+          this.transpileSass(theme.location, theme.destination, vars);
+          theme.location = theme.location.replace(/\.scss$/, '.css');
+          theme.name = theme.name.replace(/\.scss$/, '.css');
+        } else {
+          if (theme.location !== theme.destination) {
+            shelljs.mkdir('-p', path.dirname(theme.destination));
+            shelljs.cp(theme.location, theme.destination);
+          }
         }
       } else if (theme.type === 'package') {
         shelljs.mkdir('-p', theme.destination);
         shelljs.cp('-r', path.join(theme.location, '*'), theme.destination);
+        if (theme.style.endsWith('.scss')) {
+          const vars = theme.vars;
+          const src = path.join(theme.location, theme.style);
+          theme.style = theme.style.replace(/\.scss$/, '.css');
+          const dst = path.join(theme.destination, theme.style);
+          this.transpileSass(src, dst, vars);
+        }
       }
     }
   }

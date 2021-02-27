@@ -105,7 +105,8 @@ export default async function preview(cliFlags: PreviewCliFlags) {
       cwd: context,
     })
     .on('all', (event, path) => {
-      if (!/\.(md|markdown|html?|css|jpe?g|png|gif|svg)$/i.test(path)) return;
+      if (!/\.(md|markdown|html?|css|scss|jpe?g|png|gif|svg)$/i.test(path))
+        return;
       handleChangeEvent(path);
     });
 }

@@ -26,6 +26,7 @@ import {
 import type { EntryObject } from './schema/vivliostyle.config';
 import { ParsedTheme, ThemeManager } from './theme';
 import { debug, log } from './util';
+const sass = require('sass');
 
 export function cleanup(location: string) {
   debug('cleanup file', location);
@@ -108,6 +109,38 @@ export function generateManifest(
   }
 }
 
+/**
+ * sass(scss)をトランスパイルする
+ * 生成したCSSの場所によってurl()の指定がずれてしまう
+ * @param src 元ファイル
+ * @param dst 保存先ファイル名
+ * @param vars 上書きする変数
+ */
+export function transpileSass(src: string, dst: string, vars: any = null) {
+  // 変数を上書きするために "with ( $name1:value1,$name2:value2, ... )"という文字列を作る
+  let with_vars: string = '';
+  if (vars && Object.keys(vars).length > 0) {
+    with_vars = ' with (';
+    for (let key in vars) {
+      with_vars += `$${key}:${vars[key]},`;
+    }
+    with_vars = with_vars.slice(0, -1) + ')'; // 最後の,を取り除く
+  }
+
+  const result = sass.renderSync({
+    // file: src,
+    data: `@use '${src}' ${with_vars};`,
+    outputStyle: 'expanded',
+    outFile: dst,
+  });
+  fs.promises
+    .mkdir(path.dirname(dst), { recursive: true })
+    .then(() => {
+      fs.writeFileSync(dst, result.css);
+    })
+    .catch(console.error);
+}
+
 export async function compile(
   {
     entryContextDir,
@@ -181,6 +214,9 @@ export async function compile(
   for (const entry of contentEntries) {
     shelljs.mkdir('-p', path.dirname(entry.target));
 
+    // copy theme
+    (themeIndexes as ThemeManager).copyThemes();
+
     // calculate style path
     const style = locateThemePath(path.dirname(entry.target), entry.theme);
     if (entry.type === 'text/markdown') {
@@ -211,9 +247,6 @@ export async function compile(
       }
     }
   }
-
-  // copy theme
-  (themeIndexes as ThemeManager).copyThemes();
 
   // generate toc
   if (generativeContentsEntry) {

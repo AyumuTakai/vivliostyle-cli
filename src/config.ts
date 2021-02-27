@@ -101,6 +101,7 @@ export type MergedConfig = {
   timeout: number;
   sandbox: boolean;
   executableChromium: string;
+  themeVars: any | undefined;
 } & ManifestConfig;
 
 const DEFAULT_TIMEOUT = 2 * 60 * 1000; // 2 minutes
@@ -272,7 +273,12 @@ export async function mergeConfig<T extends CliFlags>(
 
   const themeIndexes = new ThemeManager();
   themeIndexes.setCliTheme(cliFlags, workspaceDir);
-  themeIndexes.setConfigTheme(config, context, workspaceDir);
+  themeIndexes.setConfigTheme(
+    config,
+    context,
+    workspaceDir,
+    config?.theme_vars,
+  );
 
   const outputs = ((): OutputFormat[] => {
     if (cliFlags.targets?.length) {
@@ -312,6 +318,7 @@ export async function mergeConfig<T extends CliFlags>(
       },
     ];
   })();
+  const themeVars = undefined;
 
   const commonOpts: CommonOpts = {
     entryContextDir,
@@ -327,6 +334,7 @@ export async function mergeConfig<T extends CliFlags>(
     timeout,
     sandbox,
     executableChromium,
+    themeVars,
   };
   if (!cliFlags.input && !config) {
     throw new Error(

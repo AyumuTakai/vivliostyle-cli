@@ -268,7 +268,7 @@ Object {
       "rel": "contents",
       "target": "__WORKSPACE__/tests/fixtures/config/workspaceDir/toc.html",
       "theme": Array [
-        Object {
+        UriTheme {
           "location": "https://myTheme.example.com",
           "name": "myTheme.example.com",
           "type": "uri",
@@ -281,7 +281,7 @@ Object {
       "source": "__WORKSPACE__/tests/fixtures/config/manuscript.md",
       "target": "__WORKSPACE__/tests/fixtures/config/workspaceDir/manuscript.html",
       "theme": Array [
-        Object {
+        UriTheme {
           "location": "https://myTheme.example.com",
           "name": "myTheme.example.com",
           "type": "uri",
@@ -295,7 +295,7 @@ Object {
       "source": "__WORKSPACE__/tests/fixtures/config/manuscript.md",
       "target": "__WORKSPACE__/tests/fixtures/config/workspaceDir/manuscript.html",
       "theme": Array [
-        Object {
+        FileTheme {
           "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/theme.css",
           "location": "__WORKSPACE__/tests/fixtures/config/theme.css",
           "name": "theme.css",
@@ -349,13 +349,13 @@ Object {
     "format": "JIS-B5",
   },
   "themeIndexes": ThemeManager [
-    Object {
+    UriTheme {
       "location": "https://myTheme.example.com",
       "name": "myTheme.example.com",
       "type": "uri",
       "vars": undefined,
     },
-    Object {
+    FileTheme {
       "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/theme.css",
       "location": "__WORKSPACE__/tests/fixtures/config/theme.css",
       "name": "theme.css",
@@ -378,7 +378,7 @@ Object {
       "rel": "contents",
       "target": "__WORKSPACE__/tests/fixtures/config/workspaceDir/toc.html",
       "theme": Array [
-        Object {
+        PackageTheme {
           "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/themes/packages/debug-theme",
           "location": "__WORKSPACE__/tests/fixtures/themes/debug-theme",
           "name": "debug-theme",
@@ -393,7 +393,7 @@ Object {
       "source": "__WORKSPACE__/tests/fixtures/config/manuscript.md",
       "target": "__WORKSPACE__/tests/fixtures/config/workspaceDir/manuscript.html",
       "theme": Array [
-        Object {
+        PackageTheme {
           "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/themes/packages/debug-theme",
           "location": "__WORKSPACE__/tests/fixtures/themes/debug-theme",
           "name": "debug-theme",
@@ -409,7 +409,7 @@ Object {
       "source": "__WORKSPACE__/tests/fixtures/config/manuscript.md",
       "target": "__WORKSPACE__/tests/fixtures/config/workspaceDir/manuscript.html",
       "theme": Array [
-        Object {
+        FileTheme {
           "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/theme.css",
           "location": "__WORKSPACE__/tests/fixtures/config/theme.css",
           "name": "theme.css",
@@ -463,7 +463,7 @@ Object {
     "format": "size",
   },
   "themeIndexes": ThemeManager [
-    Object {
+    PackageTheme {
       "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/themes/packages/debug-theme",
       "location": "__WORKSPACE__/tests/fixtures/themes/debug-theme",
       "name": "debug-theme",
@@ -471,7 +471,7 @@ Object {
       "type": "package",
       "vars": undefined,
     },
-    Object {
+    FileTheme {
       "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/theme.css",
       "location": "__WORKSPACE__/tests/fixtures/config/theme.css",
       "name": "theme.css",
@@ -604,7 +604,7 @@ Object {
       "source": "__WORKSPACE__/tests/fixtures/config/sample.md",
       "target": "__SNIP__",
       "theme": Array [
-        Object {
+        PackageTheme {
           "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/themes/packages/debug-theme",
           "location": "__WORKSPACE__/tests/fixtures/themes/debug-theme",
           "name": "debug-theme",
@@ -659,7 +659,7 @@ Object {
     "format": "size",
   },
   "themeIndexes": ThemeManager [
-    Object {
+    PackageTheme {
       "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/themes/packages/debug-theme",
       "location": "__WORKSPACE__/tests/fixtures/themes/debug-theme",
       "name": "debug-theme",

@@ -1,8 +1,11 @@
 /dist
 /broker/dist
+/broker/thirdparty/*
+!/broker/thirdparty/.gitkeep
 /tmp
 *.pdf
 .vscode
+.vs-*
 
 # Created by https://www.gitignore.io/api/node
 # Edit at https://www.gitignore.io/?templates=node

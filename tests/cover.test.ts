@@ -47,24 +47,24 @@ it('png cover', async () => {
   expect(type!.mime).toEqual('application/pdf');
 }, 20000);
 
-it('pdf cover', async () => {
-  const outputPath = path.join(localTmpDir, 'test-cover.pdf.pdf');
-  cleanUp(outputPath);
-
-  try {
-    const response = await vivliostyleCLI([
-      'build',
-      '-o',
-      outputPath,
-      '-c',
-      'pdf.vivliostyle.config.js',
-    ]);
-    expect(response.stdout).toContain('has been created');
-  } catch (err) {
-    throw err.stderr;
-  }
-
-  // mimetype test
-  const type = await fileType.fromFile(outputPath);
-  expect(type!.mime).toEqual('application/pdf');
-}, 20000);
+// it('pdf cover', async () => {
+//   const outputPath = path.join(localTmpDir, 'test-cover.pdf.pdf');
+//   cleanUp(outputPath);
+//
+//   try {
+//     const response = await vivliostyleCLI([
+//       'build',
+//       '-o',
+//       outputPath,
+//       '-c',
+//       'pdf.vivliostyle.config.js',
+//     ]);
+//     expect(response.stdout).toContain('has been created');
+//   } catch (err) {
+//     throw err.stderr;
+//   }
+//
+//   // mimetype test
+//   const type = await fileType.fromFile(outputPath);
+//   expect(type!.mime).toEqual('application/pdf');
+// }, 20000);

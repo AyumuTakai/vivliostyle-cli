@@ -1,16 +1,14 @@
 import chalk from 'chalk';
-import puppeteer from 'puppeteer';
 import shelljs from 'shelljs';
 import terminalLink from 'terminal-link';
 import path from 'upath';
-import url from 'url';
+import { URL } from 'url';
 import { Meta, Payload, TOCItem } from './broker';
-import { MergedConfig, ParsedEntry } from './config';
+import { ManuscriptEntry, MergedConfig } from './config';
 import { PostProcess } from './postprocess';
-import { getBrokerUrl, launchSourceAndBrokerServer } from './server';
+import { getBrokerUrl } from './server';
 import {
   debug,
-  findEntryPointFile,
   launchBrowser,
   logError,
   logInfo,
@@ -19,7 +17,11 @@ import {
   startLogging,
 } from './util';
 
-export type BuildPdfOptions = Omit<MergedConfig, 'outputs'> & {
+type PuppeteerPage = Resolved<
+  ReturnType<Resolved<ReturnType<typeof launchBrowser>>['newPage']>
+>;
+
+export type BuildPdfOptions = Omit<MergedConfig, 'outputs' | 'input'> & {
   input: string;
   output: string;
 };
@@ -38,21 +40,10 @@ export async function buildPDF({
   entries,
 }: BuildPdfOptions) {
   logUpdate(`Launching build environment`);
-  const root = workspaceDir;
-
-  const sourceIndex = await findEntryPointFile(input, root);
-
-  const outputSize = size;
-
-  const [source, broker] = await launchSourceAndBrokerServer(root);
-  const sourcePort = source.port;
-  const brokerPort = broker.port;
 
   const navigateURL = getBrokerUrl({
-    sourcePort,
-    sourceIndex,
-    brokerPort,
-    outputSize,
+    sourceIndex: input,
+    outputSize: size,
   });
   debug('brokerURL', navigateURL);
 
@@ -61,7 +52,7 @@ export async function buildPDF({
     headless: true,
     executablePath: executableChromium,
     // Why `--no-sandbox` flag? Running Chrome as root without --no-sandbox is not supported. See https://crbug.com/638180.
-    args: [sandbox ? '' : '--no-sandbox'],
+    args: ['--allow-file-access-from-files', sandbox ? '' : '--no-sandbox'],
   });
   const version = await browser.version();
   debug(chalk.green('success'), `version=${version}`);
@@ -80,9 +71,9 @@ export async function buildPDF({
     logInfo(msg.text());
   });
 
-  let lastEntry: ParsedEntry | undefined;
+  let lastEntry: ManuscriptEntry | undefined;
 
-  function stringifyEntry(entry: ParsedEntry) {
+  function stringifyEntry(entry: ManuscriptEntry) {
     const formattedSourcePath = chalk.bold.cyan(
       path.relative(entryContextDir, entry.source),
     );
@@ -91,12 +82,17 @@ export async function buildPDF({
     })} ${entry.title ? chalk.gray(entry.title) : ''}`;
   }
 
-  function handleEntry(response: puppeteer.Response) {
-    const entry = entries.find(
-      (entry) =>
-        path.relative(workspaceDir, entry.target) ===
-        url.parse(response.url()).pathname!.substring(1),
-    );
+  function handleEntry(response: any) {
+    const entry = entries.find((entry): entry is ManuscriptEntry => {
+      if (!('source' in entry)) {
+        return false;
+      }
+      const url = new URL(response.url());
+      return url.protocol === 'file:'
+        ? entry.target === url.pathname
+        : path.relative(workspaceDir, entry.target) ===
+            url.pathname.substring(1);
+    });
     if (entry) {
       if (!lastEntry) {
         lastEntry = entry;
@@ -118,6 +114,8 @@ export async function buildPDF({
     handleEntry(response);
 
     if (300 > response.status() && 200 <= response.status()) return;
+    // file protocol doesn't have status code
+    if (response.url().startsWith('file://') && response.ok()) return;
 
     logError(chalk.red(`${response.status()}`, response.url()));
     startLogging();
@@ -139,7 +137,9 @@ export async function buildPDF({
     },
   );
 
-  logSuccess(stringifyEntry(lastEntry!));
+  if (lastEntry) {
+    logSuccess(stringifyEntry(lastEntry));
+  }
   startLogging('Building PDF');
 
   const pdf = await page.pdf({
@@ -166,14 +166,14 @@ export async function buildPDF({
   return output;
 }
 
-async function loadMetadata(page: puppeteer.Page): Promise<Meta> {
+async function loadMetadata(page: PuppeteerPage): Promise<Meta> {
   return page.evaluate(() => window.coreViewer.getMetadata());
 }
 
 // Show and hide the TOC in order to read its contents.
 // Chromium needs to see the TOC links in the DOM to add
 // the PDF destinations used during postprocessing.
-async function loadTOC(page: puppeteer.Page): Promise<TOCItem[]> {
+async function loadTOC(page: PuppeteerPage): Promise<TOCItem[]> {
   return page.evaluate(
     () =>
       new Promise<TOCItem[]>((resolve) => {

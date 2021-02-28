@@ -1,5 +1,26 @@
 {
   "definitions": {
+    "theme": {
+      "description": "Theme package path or URL of css file.",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string",
+          "maxLength": 214,
+          "minLength": 1,
+          "pattern": "^(?:@[a-z0-9-*~][a-z0-9-*._~]*/)?[a-z0-9-~][a-z0-9-._~]*$"
+        },
+        {
+          "type": "string",
+          "pattern": "^.+/[^/]+(.css|\\w)$"
+        }
+      ]
+    },
     "entry": {
       "type": "string",
       "minLength": 1
@@ -9,8 +30,29 @@
       "properties": {
         "path": { "type": "string" },
         "title": { "type": "string" },
+        "theme": { "$ref": "#/definitions/theme" },
+        "encodingFormat": { "type": "string" },
+        "rel": {
+          "type": ["string", "array"],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    },
+    "contentsEntryObject": {
+      "type": "object",
+      "properties": {
+        "rel": {
+          "type": "string",
+          "const": "contents"
+        },
+        "title": { "type": "string" },
         "theme": { "type": "string" }
       },
+      "required": ["rel"],
       "additionalProperties": false
     },
     "output": {
@@ -23,6 +65,7 @@
         "path": { "type": "string" },
         "format": { "type": "string" }
       },
+      "required": ["path"],
       "additionalProperties": false
     },
     "coreProps": {
@@ -38,21 +81,7 @@
           "description": "Author",
           "minLength": 1
         },
-        "theme": {
-          "description": "Theme package path or URL of css file.",
-          "anyOf": [
-            {
-              "type": "string",
-              "maxLength": 214,
-              "minLength": 1,
-              "pattern": "^(?:@[a-z0-9-*~][a-z0-9-*._~]*/)?[a-z0-9-~][a-z0-9-._~]*$"
-            },
-            {
-              "type": "string",
-              "pattern": "^.+/[^/]+(.css|\\w)$"
-            }
-          ]
-        },
+        "theme": { "$ref": "#/definitions/theme" },
         "entry": {
           "oneOf": [
             {
@@ -60,7 +89,8 @@
               "items": {
                 "oneOf": [
                   { "$ref": "#/definitions/entry" },
-                  { "$ref": "#/definitions/entryObject" }
+                  { "$ref": "#/definitions/entryObject" },
+                  { "$ref": "#/definitions/contentsEntryObject" }
                 ]
               }
             },
@@ -88,6 +118,20 @@
             { "$ref": "#/definitions/outputObject" }
           ]
         },
+        "workspaceDir": {
+          "type": "string",
+          "description": "",
+          "minLength": 1
+        },
+        "includeAssets": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": { "$ref": "#/definitions/entry" }
+            },
+            { "$ref": "#/definitions/entry" }
+          ]
+        },
         "size": {
           "type": "string",
           "description": "",
@@ -108,6 +152,10 @@
               "minLength": 1
             }
           ]
+        },
+        "tocTitle": {
+          "type": "string",
+          "minLength": 1
         },
         "cover": {
           "type": "string",

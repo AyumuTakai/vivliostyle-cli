@@ -6,4 +6,5 @@ module.exports = {
   theme: 'scss/style.scss',
   theme_vars: { color: 'green', bg_color: 'lightgreen' },
   entry: ['index.md'],
+  workspaceDir: '.ws-file',
 };

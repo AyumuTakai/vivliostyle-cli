@@ -1,9 +1,9 @@
 import chokidar from 'chokidar';
 import puppeteer from 'puppeteer';
 import path from 'upath';
-import { buildArtifacts } from '../builder';
+import { compile, copyAssets } from '../builder';
 import { collectVivliostyleConfig, mergeConfig } from '../config';
-import { getBrokerUrl, launchSourceAndBrokerServer } from '../server';
+import { getBrokerUrl } from '../server';
 import {
   debug,
   gracefulError,
@@ -11,7 +11,6 @@ import {
   logSuccess,
   startLogging,
   stopLogging,
-  useTmpDirectory,
 } from '../util';
 import { PreviewCliFlags, setupPreviewParserProgram } from './preview.parser';
 
@@ -20,18 +19,19 @@ let timer: NodeJS.Timeout;
 try {
   const program = setupPreviewParserProgram();
   program.parse(process.argv);
+  const options = program.opts();
   preview({
     input: program.args?.[0],
-    configPath: program.config,
-    theme: program.theme,
-    size: program.size,
-    title: program.title,
-    author: program.author,
-    language: program.language,
-    verbose: program.verbose,
-    timeout: program.timeout,
-    sandbox: program.sandbox,
-    executableChromium: program.executableChromium,
+    configPath: options.config,
+    theme: options.theme,
+    size: options.size,
+    title: options.title,
+    author: options.author,
+    language: options.language,
+    verbose: options.verbose,
+    timeout: options.timeout,
+    sandbox: options.sandbox,
+    executableChromium: options.executableChromium,
   }).catch(gracefulError);
 } catch (err) {
   gracefulError(err);
@@ -48,72 +48,65 @@ export default async function preview(cliFlags: PreviewCliFlags) {
     ? path.dirname(vivliostyleConfigPath)
     : process.cwd();
 
-  const [tmpDir, clear] = await useTmpDirectory();
+  const config = await mergeConfig(cliFlags, vivliostyleConfig, context);
 
-  try {
-    const config = await mergeConfig(
-      cliFlags,
-      vivliostyleConfig,
-      context,
-      tmpDir,
-    );
-
-    // build artifacts
-    const { manifestPath } = await buildArtifacts(config);
-
-    const [source, broker] = await launchSourceAndBrokerServer(
-      config.workspaceDir,
-    );
-
-    const url = getBrokerUrl({
-      sourceIndex: path.relative(config.workspaceDir, manifestPath),
-      sourcePort: source.port,
-      brokerPort: broker.port,
-    });
-
-    debug(
-      `Executing Chromium path: ${
-        config.executableChromium || puppeteer.executablePath()
-      }`,
-    );
-    const browser = await launchBrowser({
-      headless: false,
-      executablePath: config.executableChromium || puppeteer.executablePath(),
-      args: [config.sandbox ? '' : '--no-sandbox'],
-    });
-    const page = await browser.newPage();
-    await page.setViewport({ width: 0, height: 0 });
-    await page.goto(url);
-
-    stopLogging('Up and running ([ctrl+c] to quit)', '🚀');
-
-    function handleChangeEvent(path: string) {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        startLogging(`Rebuilding ${path}`);
-        // build artifacts
-        buildArtifacts(config);
-        page.reload();
-        logSuccess(`Built ${path}`);
-      }, 2000);
-    }
-
-    chokidar
-      .watch('**', {
-        ignored: (p: string) => {
-          return (
-            /node_modules|\.git/.test(p) || p.startsWith(config.workspaceDir)
-          );
-        },
-        cwd: context,
-      })
-      .on('all', (event, path) => {
-        if (!/\.(md|markdown|html?|css|scss|jpe?g|png|gif|svg)$/i.test(path)) {
-          return;
-        }
-        handleChangeEvent(path);
-      });
-  } finally {
-    clear();
+  // build artifacts
+  if (config.manifestPath) {
+    await compile(config);
+    await copyAssets(config);
   }
+
+  const url = getBrokerUrl({
+    sourceIndex: (config.manifestPath ??
+      config.webbookEntryPath ??
+      config.epubOpfPath) as string,
+  });
+
+  debug(
+    `Executing Chromium path: ${
+      config.executableChromium || puppeteer.executablePath()
+    }`,
+  );
+  const browser = await launchBrowser({
+    headless: false,
+    executablePath: config.executableChromium || puppeteer.executablePath(),
+    args: [
+      '--allow-file-access-from-files',
+      config.sandbox ? '' : '--no-sandbox',
+    ],
+  });
+  const page = await browser.newPage();
+  await page.setViewport({ width: 0, height: 0 });
+  await page.goto(url);
+
+  stopLogging('Up and running ([ctrl+c] to quit)', '🚀');
+
+  function handleChangeEvent(path: string) {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      startLogging(`Rebuilding ${path}`);
+      // build artifacts
+      if (config.manifestPath) {
+        await compile(config, { reload: true });
+        await copyAssets(config);
+      }
+      page.reload();
+      logSuccess(`Built ${path}`);
+    }, 2000);
+  }
+
+  chokidar
+    .watch('**', {
+      ignored: (p: string) => {
+        return (
+          /node_modules|\.git/.test(p) || p.startsWith(config.workspaceDir)
+        );
+      },
+      cwd: context,
+    })
+    .on('all', (event, path) => {
+      if (!/\.(md|markdown|html?|css|scss|jpe?g|png|gif|svg)$/i.test(path))
+        return;
+      handleChangeEvent(path);
+    });
 }

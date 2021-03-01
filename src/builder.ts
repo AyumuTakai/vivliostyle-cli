@@ -137,14 +137,8 @@ export async function compile(
     from: string,
     theme?: ParsedTheme,
   ): string | undefined => {
-    switch (theme?.type) {
-      case 'uri':
-        return theme.location;
-      case 'file':
-        return path.relative(from, theme.destination);
-      case 'package':
-        return path.relative(from, path.join(theme.destination, theme.style));
-    }
+    if (!theme) return;
+    return theme?.locateThemePath(from);
   };
 
   const generativeContentsEntry = entries.find(
@@ -165,6 +159,10 @@ export async function compile(
   );
   for (const entry of contentEntries) {
     shelljs.mkdir('-p', path.dirname(entry.target));
+
+    // copy theme
+    const themeManager = themeIndexes as ThemeManager;
+    themeManager.copyThemes();
 
     // calculate style path
     const style = locateThemePath(path.dirname(entry.target), entry.theme);

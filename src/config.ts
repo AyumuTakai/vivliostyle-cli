@@ -33,7 +33,7 @@ import { debug, log, readJSON, touchTmpFile } from './util';
 export interface ManuscriptEntry {
   type: ManuscriptMediaType;
   title?: string;
-  theme?: ParsedTheme[];
+  theme?: ParsedTheme;
   source: string;
   target: string;
   rel?: string | string[];
@@ -42,7 +42,7 @@ export interface ManuscriptEntry {
 export interface ContentsEntry {
   rel: 'contents';
   title?: string;
-  theme?: ParsedTheme[];
+  theme?: ParsedTheme;
   target: string;
 }
 
@@ -101,7 +101,6 @@ export type MergedConfig = {
   timeout: number;
   sandbox: boolean;
   executableChromium: string;
-  themeVars: any | undefined;
 } & ManifestConfig;
 
 const DEFAULT_TIMEOUT = 2 * 60 * 1000; // 2 minutes
@@ -160,14 +159,14 @@ function parseFileMetadata(
   type: ManuscriptMediaType,
   sourcePath: string,
   workspaceDir: string,
-): { title?: string; theme?: ParsedTheme[] } {
+): { title?: string; theme?: ParsedTheme } {
   const sourceDir = path.dirname(sourcePath);
   let title: string | undefined;
-  let theme: ParsedTheme[] = [];
+  let theme: ParsedTheme | undefined;
   if (type === 'text/markdown') {
     const file = processMarkdown(sourcePath);
     title = file.data.title;
-    theme = ThemeManager.parseThemes(file.data.theme, sourceDir, workspaceDir);
+    theme = ThemeManager.parseTheme(file.data.theme, sourceDir, workspaceDir);
   } else {
     const $ = cheerio.load(fs.readFileSync(sourcePath, 'utf8'));
     title = $('title')?.text() ?? undefined;
@@ -273,12 +272,7 @@ export async function mergeConfig<T extends CliFlags>(
 
   const themeIndexes = new ThemeManager();
   themeIndexes.setCliTheme(cliFlags, workspaceDir);
-  themeIndexes.setConfigTheme(
-    config,
-    context,
-    workspaceDir,
-    config?.theme_vars,
-  );
+  themeIndexes.setConfigTheme(config, context, workspaceDir);
 
   const outputs = ((): OutputFormat[] => {
     if (cliFlags.targets?.length) {
@@ -318,7 +312,6 @@ export async function mergeConfig<T extends CliFlags>(
       },
     ];
   })();
-  const themeVars = undefined;
 
   const commonOpts: CommonOpts = {
     entryContextDir,
@@ -334,7 +327,6 @@ export async function mergeConfig<T extends CliFlags>(
     timeout,
     sandbox,
     executableChromium,
-    themeVars,
   };
   if (!cliFlags.input && !config) {
     throw new Error(

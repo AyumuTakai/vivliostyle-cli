@@ -135,16 +135,10 @@ export async function compile(
 
   const locateThemePath = (
     from: string,
-    theme?: ParsedTheme | ParsedTheme[],
-  ): string[] | undefined => {
+    theme?: ParsedTheme,
+  ): string | undefined => {
     if (!theme) return;
-    if (Array.isArray(theme)) {
-      return theme.map((t) => {
-        return t.locateThemePath(from);
-      });
-    } else if (theme) {
-      return [theme.locateThemePath(from)];
-    }
+    return theme?.locateThemePath(from);
   };
 
   const generativeContentsEntry = entries.find(
@@ -200,6 +194,9 @@ export async function compile(
       }
     }
   }
+
+  // copy theme
+  (themeIndexes as ThemeManager).copyThemes();
 
   // generate toc
   if (generativeContentsEntry) {

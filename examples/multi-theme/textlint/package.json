@@ -13,7 +13,7 @@
       "name": "Textlint plugin",
       "style": "./theme.css",
       "category": "replace",
-      "replace": "scripts.js",
+      "scripts": "scripts.js",
       "topics": [
         "リプレイス","校正","TextLint"
       ]

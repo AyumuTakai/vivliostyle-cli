@@ -167,18 +167,21 @@ export class PackageTheme extends Theme {
    * @param location
    * @param destination
    * @param style
+   * @param replace
    */
   public constructor(
     name: string,
     location: string,
     destination: string,
     style: string,
+    replace?: string,
   ) {
     super();
     this.name = name;
     this.location = location;
     this.destination = destination;
     this.style = style;
+    this.replace = replace;
   }
 
   /**
@@ -198,6 +201,7 @@ export class PackageTheme extends Theme {
     if (!pkgRootDir?.endsWith('.css')) {
       const location = pkgRootDir ?? path.resolve(contextDir, locator);
       const style = PackageTheme.parseStyleLocator(location, locator);
+      const scripts = style?.replace;
       if (style) {
         const destination = path.join(
           workspaceDir,
@@ -209,6 +213,7 @@ export class PackageTheme extends Theme {
           location,
           destination,
           style.maybeStyle,
+          scripts,
         );
         return theme;
       }

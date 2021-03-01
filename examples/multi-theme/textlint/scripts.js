@@ -17,8 +17,6 @@ exports.preprocess = [
         }
         fs.writeFileSync("textlint.log",result + "\n",{flag:"a"});
         if (engine.isErrorResults(results)) {
-          const output = engine.formatResults(results);
-          fs.writeFileSync("textlint.log",output + "\n",{flag:"a"});
         }
       });
       return contents;

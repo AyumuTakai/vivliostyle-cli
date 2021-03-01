@@ -20,7 +20,7 @@
       "name": "サブテーマ3",
       "style": "./theme.css",
       "category": "replace",
-      "replace": "scripts.js",
+      "scripts": "scripts.js",
       "topics": [
         "リプレイス"
       ]

@@ -20,7 +20,7 @@
       "name": "掌の絵文字",
       "style": "./theme.css",
       "category": "replace",
-      "replace": "scripts.js",
+      "scripts": "scripts.js",
       "topics": [
         "リプレイス"
       ]

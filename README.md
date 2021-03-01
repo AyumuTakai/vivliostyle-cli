@@ -1,136 +1,108 @@
-![Vivliostyle CLI](assets/cover.jpg)
+# 自家用 vivliostyle-cli
 
-[![npm](https://flat.badgen.net/npm/v/@vivliostyle/cli)][npm-url]
-![npm: version (tag)](https://flat.badgen.net/npm/v/@vivliostyle/cli/next)
-[![npm: total downloads](https://flat.badgen.net/npm/dt/@vivliostyle/cli)][npm-url]
+[本家 vivliostyle-cli](https://github.com/vivliostyle/vivliostyle-cli)
 
-[npm-url]: https://npmjs.org/package/@vivliostyle/cli
+## こんなことができたら良いな
 
-Supercharge your command-line publication workflow.
+| 機能                                                     | 状態                          |
+| -------------------------------------------------------- | ----------------------------- |
+| 既存テーマのスタイルのカスタマイズ(スタイルの上書き)     | 試験実装済み 設定方法を検討中 |
+| コンテンツの置換(VFM のリプレイス機能)                   | 試験実装済み 設定方法を検討中 |
+| md ファイル->HTML 変換に対する前処理                     | 試験実装済み 設定方法を検討中 |
+| 出力された PDF や EPUB への後処理                        | 仕様検討中                    |
+| SCSS トランスパイル                                      | 試験実装済み 設定方法を検討中 |
+| SCSS 変数の config.js での設定                           | 試験実装済み 設定方法を検討中 |
+| SCSS とスクリプトで設定値の共有                          | 仕様検討中                    |
+| 独自タグの追加(リプレイスでは不可能な複数行にわたるもの) | 前処理で実現可能か            |
 
-## Install
+## 機能詳細
 
-```
-npm install -g @vivliostyle/cli
-```
+### 既存テーマのスタイルのカスタマイズ(スタイルの上書き)
 
-## Use
+複数のテーマを読み込むことで公式テーマなどを簡単にカスタマイズできるようになる。
 
-```
-Usage: vivliostyle [options] [command]
+設定方法については本家の Issue として検討中 [Issue143](https://github.com/vivliostyle/vivliostyle-cli/issues/143#issuecomment-786669335)
 
-Options:
-  -v, --version   output the version number
-  -h, --help      display help for command
+### コンテンツの置換(VFM のリプレイス機能)
 
-Commands:
-  init            create vivliostyle config
-  build           build and create PDF file
-  preview         launch preview server
-  help [command]  display help for command
-```
+コンテンツの置換ルールを JavaScript で記述し、Markdown から HTML に変換する際に実行する。
 
-### `init`
+[置換ルールの記述方法(VFM)](https://vivliostyle.github.io/vfm/#/hooks)
 
-> create vivliostyle config file.
-
-```bash
-vivliostyle init
-```
-
-You are new to Vivliostyle? Check out our latest project [Create Book](https://github.com/vivliostyle/create-book#readme).
-With Create Book, you can easily bootstrap your book project and start writing without any extra effort.
-
-#### CLI Options
-
-```
-Options:
-  --title <title>            title
-  --author <author>          author
-  -l, --language <language>  language
-  -s, --size  <size>         paper size
-  -T, --theme <theme>        theme
-  -h, --help                 display help for command
+```javascript
+exports.replaces = [
+  {
+    test: /猫/g,
+    match: ([], h) => {
+      return h('span', '🐈');
+    },
+  },
+];
 ```
 
-### `build`
+### md ファイル->HTML 変換に対する前処理
 
-> build and create PDF file.
+Markdown から HTML に変換する前にファイル全体に対する処理を行なう。
 
-Put [vivliostyle.config.js](https://github.com/vivliostyle/vivliostyle-cli/issues/38) in the root directory, then:
+#### 想定される用途
 
-```bash
-vivliostyle build
+- 自動校正(TextLint 利用)
+- 音声合成(OpenJTalk 利用)
+- コンテンツを元にした画像ファイル作成(PlantUML 利用)
+- 複数行にわたる独自タグ
+
+#### 現在の設定方法
+
+```javascript
+exports.preprocess = [
+  (filepath, contents) => {
+    // contentsに関する処理
+    return contents;
+  },
+];
 ```
 
-![build](assets/build.gif)
+### 出力された PDF や EPUB への後処理
 
-#### CLI options
+#### 想定される用途
 
-```
-Options:
-  -c, --config <config_file>    path to vivliostyle.config.js [vivliostyle.config.js]
-  -o, --output <path>           specify output file name or directory [<title>.pdf]
-                                This option can be specified multiple, then each -o options can be supplied one -f option.
-                                ex: -o output1 -f webpub -o output2.pdf -f pdf
-  -f, --format <format>         specify output format corresponding output target
-                                If an extension is specified on -o option, this field will be inferenced automatically.
-  -s, --size <size>             output pdf size [Letter]
-                                preset: A5, A4, A3, B5, B4, JIS-B5, JIS-B4, letter, legal, ledger
-                                custom(comma separated): 182mm,257mm or 8.5in,11in
-  -p, --press-ready             make generated PDF compatible with press ready PDF/X-1a [false]
-  -t, --timeout <seconds>       timeout limit for waiting Vivliostyle process [60s]
-  -T, --theme <theme>           theme path or package name
-  --title <title>               title
-  --author <author>             author
-  -l, --language <language>     language
-  --verbose                     verbose log output
-  --no-sandbox                  launch chrome without sandbox. use this option when ECONNREFUSED error occurred.
-  --executable-chromium <path>  specify a path of executable Chrome (or Chromium) you installed
-  -h, --help                    display help for command
+- 生成されたファイルのアップロード
+- 自動入稿
+- 生成物チェック
+
+#### 想定される設定方法
+
+```javascript
+exports.postprocess = [
+  (filepath) => {
+    // PDFやWebPubに対する処理
+  },
+];
 ```
 
-### `preview`
+### SCSS トランスパイル
 
-> open preview page and save PDF interactively.
+テーマを workspace にコピーする際に SCSS から CSS にトランスパイルする。
 
-```bash
-vivliostyle preview
-```
+#### 想定される用途
 
-#### CLI options
+- テーマのカスタマイズ
 
-```
-Options:
-  -c, --config <config_file>    path to vivliostyle.config.js
-  -T, --theme <theme>           theme path or package name
-  -s, --size <size>             output pdf size [Letter]
-                                preset: A5, A4, A3, B5, B4, JIS-B5, JIS-B4, letter, legal, ledger
-                                custom(comma separated): 182mm,257mm or 8.5in,11in
-  --title <title>               title
-  --author <author>             author
-  -l, --language <language>     language
-  --verbose                     verbose log output
-  --no-sandbox                  launch chrome without sandbox (use this option to avoid ECONNREFUSED error)
-  --executable-chromium <path>  specify a path of executable Chrome(Chromium) you installed
-  -h, --help                    display help for command
-```
+### SCSS 変数の config.js での設定
 
-## Q&A
+テーマに含まれている SCSS の変数値を vivliostyle.config.js に設定した値で上書きする。
 
-### Not working in Node v14.0.0
+#### 想定される用途
 
-`puppeteer` is not working in Node v14.0.0, ie `vivliostyle-cli` is not working same.
-See also: https://developers.google.com/web/tools/puppeteer/troubleshooting
+- テーマのカスタマイズ
+- レイアウト確認用枠線などの ON/OFF
 
-The error has been resolved by Node `>= v14.1.0` or `<= v12.0.0`.
+### SCSS とスクリプトで設定値の共有
 
-## Contribute
+SCSS と replace,preprocess,postprocess で変数を共有する。
 
-See [Contribution Guide](CONTRIBUTING.md).
+なにかおもしろいことができるのでは。
 
-[![](https://sourcerer.io/fame/uetchy/vivliostyle/vivliostyle-cli/images/0)](https://sourcerer.io/fame/uetchy/vivliostyle/vivliostyle-cli/links/0)[![](https://sourcerer.io/fame/uetchy/vivliostyle/vivliostyle-cli/images/1)](https://sourcerer.io/fame/uetchy/vivliostyle/vivliostyle-cli/links/1)[![](https://sourcerer.io/fame/uetchy/vivliostyle/vivliostyle-cli/images/2)](https://sourcerer.io/fame/uetchy/vivliostyle/vivliostyle-cli/links/2)[![](https://sourcerer.io/fame/uetchy/vivliostyle/vivliostyle-cli/images/3)](https://sourcerer.io/fame/uetchy/vivliostyle/vivliostyle-cli/links/3)[![](https://sourcerer.io/fame/uetchy/vivliostyle/vivliostyle-cli/images/4)](https://sourcerer.io/fame/uetchy/vivliostyle/vivliostyle-cli/links/4)[![](https://sourcerer.io/fame/uetchy/vivliostyle/vivliostyle-cli/images/5)](https://sourcerer.io/fame/uetchy/vivliostyle/vivliostyle-cli/links/5)[![](https://sourcerer.io/fame/uetchy/vivliostyle/vivliostyle-cli/images/6)](https://sourcerer.io/fame/uetchy/vivliostyle/vivliostyle-cli/links/6)[![](https://sourcerer.io/fame/uetchy/vivliostyle/vivliostyle-cli/images/7)](https://sourcerer.io/fame/uetchy/vivliostyle/vivliostyle-cli/links/7)
+### 独自タグの追加(リプレイスでは不可能な複数行にわたるもの)
 
-## License
-
-Licensed under [AGPL Version 3](http://www.gnu.org/licenses/agpl.html).
+preprocess 機能で実現できそう。

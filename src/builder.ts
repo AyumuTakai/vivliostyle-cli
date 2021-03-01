@@ -113,8 +113,8 @@ function clearReplaceCache(entries: ManuscriptEntry[]) {
   for (const entry of entries) {
     if (!entry.theme || entry.theme.length == 0) continue;
     for (const theme of entry.theme) {
-      if (theme.replace) {
-        const replaceFile = path.join(theme.location, theme.replace);
+      if (theme.scripts) {
+        const replaceFile = path.join(theme.location, theme.scripts);
         delete require.cache[replaceFile];
       }
     }
@@ -125,8 +125,8 @@ function importReplaceRules(entry: ManuscriptEntry): ReplaceRule[] | undefined {
   if (!entry.theme || entry.theme.length == 0) return;
   let replaceRules: ReplaceRule[] | undefined = undefined;
   for (const theme of entry.theme) {
-    if (theme.replace) {
-      const replaceFile = path.join(theme.location, theme.replace);
+    if (theme.scripts) {
+      const replaceFile = path.join(theme.location, theme.scripts);
       if (fs.existsSync(replaceFile)) {
         const replaces: ReplaceRule[] | undefined = require(replaceFile)
           .replaces as ReplaceRule[] | undefined;
@@ -148,8 +148,8 @@ function importPreprocess(
   if (!entry.theme || entry.theme.length == 0) return;
   let preProcess: ((contents: string) => string)[] | undefined = undefined;
   for (const theme of entry.theme) {
-    if (theme.replace) {
-      const replaceFile = path.join(theme.location, theme.replace);
+    if (theme.scripts) {
+      const replaceFile = path.join(theme.location, theme.scripts);
       if (fs.existsSync(replaceFile)) {
         const procs:
           | ((contents: string) => string)[]

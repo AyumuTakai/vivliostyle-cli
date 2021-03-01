@@ -47,7 +47,7 @@ export class UriTheme extends Theme {
   type: 'uri' = 'uri';
   name: string;
   location: string;
-  replace?: string;
+  scripts?: string;
 
   /**
    *
@@ -95,7 +95,7 @@ export class FileTheme extends Theme {
   name: string;
   location: string;
   destination: string;
-  replace?: string;
+  scripts?: string;
 
   /**
    *
@@ -159,7 +159,7 @@ export class PackageTheme extends Theme {
   location: string;
   destination: string;
   style: string;
-  replace?: string;
+  scripts?: string;
 
   /**
    *
@@ -167,21 +167,21 @@ export class PackageTheme extends Theme {
    * @param location
    * @param destination
    * @param style
-   * @param replace
+   * @param scripts
    */
   public constructor(
     name: string,
     location: string,
     destination: string,
     style: string,
-    replace?: string,
+    scripts?: string,
   ) {
     super();
     this.name = name;
     this.location = location;
     this.destination = destination;
     this.style = style;
-    this.replace = replace;
+    this.scripts = scripts;
   }
 
   /**
@@ -201,7 +201,7 @@ export class PackageTheme extends Theme {
     if (!pkgRootDir?.endsWith('.css')) {
       const location = pkgRootDir ?? path.resolve(contextDir, locator);
       const style = PackageTheme.parseStyleLocator(location, locator);
-      const scripts = style?.replace;
+      const scripts = style?.scripts;
       if (style) {
         const destination = path.join(
           workspaceDir,
@@ -236,9 +236,9 @@ export class PackageTheme extends Theme {
     shelljs.cp('-r', path.join(this.location, '*'), this.destination);
   }
 
-  private static parseReplaceLocator(packageJson: any): string | undefined {
-    const replace = packageJson?.vivliostyle?.theme?.replace ?? undefined;
-    return replace;
+  private static parseScriptsLocator(packageJson: any): string | undefined {
+    const scripts = packageJson?.vivliostyle?.theme?.scripts ?? undefined;
+    return scripts;
   }
 
   /**
@@ -255,7 +255,7 @@ export class PackageTheme extends Theme {
     pkgRootDir: string,
     locator: string,
   ):
-    | { name: string; maybeStyle: string; replace: string | undefined }
+    | { name: string; maybeStyle: string; scripts: string | undefined }
     | undefined {
     const pkgJsonPath = path.join(pkgRootDir, 'package.json');
     if (!fs.existsSync(pkgJsonPath)) {
@@ -275,9 +275,9 @@ export class PackageTheme extends Theme {
       );
     }
 
-    const replace = PackageTheme.parseReplaceLocator(packageJson);
+    const scripts = PackageTheme.parseScriptsLocator(packageJson);
 
-    return { name: packageJson.name, maybeStyle, replace };
+    return { name: packageJson.name, maybeStyle, scripts };
   }
 }
 /**

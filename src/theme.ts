@@ -270,7 +270,7 @@ export class PackageTheme extends Theme {
       );
     }
 
-    const replace = ThemeManager.parseReplaceLocator(packageJson);
+    const replace = PackageTheme.parseReplaceLocator(packageJson);
 
     return { name: packageJson.name, maybeStyle, replace };
   }

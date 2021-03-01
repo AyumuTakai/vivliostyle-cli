@@ -19,7 +19,7 @@ export function generateTocHtml({
   distDir: string;
   title?: string;
   tocTitle: string;
-  style?: string;
+  style?: string[];
 }): string {
   const items = entries.map((entry) =>
     h(
@@ -33,8 +33,6 @@ export function generateTocHtml({
   );
   const styles = Array.isArray(style)
     ? style.map((s) => h('link', { href: s, rel: 'stylesheet' }))
-    : style
-    ? h('link', { href: style, rel: 'stylesheet' })
     : null;
   const toc = h(
     'html',
@@ -68,7 +66,7 @@ export function processManuscriptHtml(
     language,
   }: {
     title?: string;
-    style?: string;
+    style?: string[];
     contentType?: 'text/html' | 'application/xhtml+xml';
     language?: string | null;
   },
@@ -83,15 +81,10 @@ export function processManuscriptHtml(
     $('title').text(title);
   }
   if (style) {
-    if (Array.isArray(style)) {
-      style.map((s) => {
-        $('head').append(`<link rel="stylesheet" />`);
-        $('head > *:last-child').attr('href', s);
-      });
-    } else {
+    style.map((s) => {
       $('head').append(`<link rel="stylesheet" />`);
-      $('head > *:last-child').attr('href', style);
-    }
+      $('head > *:last-child').attr('href', s);
+    });
   }
   if (language) {
     if (contentType === 'application/xhtml+xml') {

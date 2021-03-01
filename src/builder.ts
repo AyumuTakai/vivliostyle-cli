@@ -135,10 +135,10 @@ export async function compile(
 
   const locateThemePath = (
     from: string,
-    theme?: ParsedTheme,
-  ): string | undefined => {
+    theme?: ParsedTheme[],
+  ): string[] | undefined => {
     if (!theme) return;
-    return theme?.locateThemePath(from);
+    return theme?.map((t) => t.locateThemePath(from));
   };
 
   const generativeContentsEntry = entries.find(

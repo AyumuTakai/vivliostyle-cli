@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "textlint-rule-joyo-kanji": true
+  },
+  "plugins": [
+    "html"
+  ]
+}

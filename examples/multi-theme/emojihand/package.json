@@ -1,0 +1,29 @@
+{
+  "name": "emojihand",
+  "description": "リプレイス機能テスト",
+  "version": "0.0.1",
+  "author": "Vivliostyle <mail@vivliostyle.org>",
+  "files": [
+    "*.css",
+    "*.js"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "vivliostyle",
+    "vivliostyle-theme"
+  ],
+  "license": "CC0-1.0",
+  "vivliostyle": {
+    "theme": {
+      "name": "掌の絵文字",
+      "style": "./theme.css",
+      "category": "replace",
+      "replace": "scripts.js",
+      "topics": [
+        "リプレイス"
+      ]
+    }
+  }
+}

@@ -47,6 +47,7 @@ export class UriTheme extends Theme {
   type: 'uri' = 'uri';
   name: string;
   location: string;
+  replace?: string;
 
   /**
    *
@@ -94,6 +95,7 @@ export class FileTheme extends Theme {
   name: string;
   location: string;
   destination: string;
+  replace?: string;
 
   /**
    *
@@ -157,6 +159,7 @@ export class PackageTheme extends Theme {
   location: string;
   destination: string;
   style: string;
+  replace?: string;
 
   /**
    *
@@ -228,6 +231,11 @@ export class PackageTheme extends Theme {
     shelljs.cp('-r', path.join(this.location, '*'), this.destination);
   }
 
+  private static parseReplaceLocator(packageJson: any): string | undefined {
+    const replace = packageJson?.vivliostyle?.theme?.replace ?? undefined;
+    return replace;
+  }
+
   /**
    * parse theme locator
    * 1. specified in the theme field of the vivliostyle.config.js
@@ -241,7 +249,9 @@ export class PackageTheme extends Theme {
   static parseStyleLocator(
     pkgRootDir: string,
     locator: string,
-  ): { name: string; maybeStyle: string } | undefined {
+  ):
+    | { name: string; maybeStyle: string; replace: string | undefined }
+    | undefined {
     const pkgJsonPath = path.join(pkgRootDir, 'package.json');
     if (!fs.existsSync(pkgJsonPath)) {
       return undefined;
@@ -259,7 +269,10 @@ export class PackageTheme extends Theme {
         `invalid style file: ${maybeStyle} while parsing ${locator}`,
       );
     }
-    return { name: packageJson.name, maybeStyle };
+
+    const replace = ThemeManager.parseReplaceLocator(packageJson);
+
+    return { name: packageJson.name, maybeStyle, replace };
   }
 }
 /**

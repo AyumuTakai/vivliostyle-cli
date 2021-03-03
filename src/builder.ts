@@ -25,7 +25,7 @@ import {
   publicationSchemas,
 } from './schema/pubManifest.schema';
 import type { EntryObject } from './schema/vivliostyle.config';
-import { ParsedTheme, ThemeManager } from './theme';
+import { ParsedTheme, PreProcess, ThemeManager } from './theme';
 import { debug, log } from './util';
 
 export function cleanup(location: string) {
@@ -109,7 +109,7 @@ export function generateManifest(
   }
 }
 
-function clearReplaceCache(entries: ManuscriptEntry[]) {
+function clearScriptsCache(entries: ManuscriptEntry[]) {
   for (const entry of entries) {
     if (!entry.theme || entry.theme.length == 0) continue;
     for (const theme of entry.theme) {
@@ -121,51 +121,24 @@ function clearReplaceCache(entries: ManuscriptEntry[]) {
   }
 }
 
-function importReplaceRules(entry: ManuscriptEntry): ReplaceRule[] | undefined {
-  if (!entry.theme || entry.theme.length == 0) return;
-  let replaceRules: ReplaceRule[] | undefined = undefined;
-  for (const theme of entry.theme) {
-    if (theme.scripts) {
-      const replaceFile = path.join(theme.location, theme.scripts);
-      if (fs.existsSync(replaceFile)) {
-        const replaces: ReplaceRule[] | undefined = require(replaceFile)
-          .replaces as ReplaceRule[] | undefined;
-        if (replaces && replaces.length > 0) {
-          if (!replaceRules) {
-            replaceRules = [];
-          }
-          replaceRules = replaceRules?.concat(replaces);
-        }
-      }
+function importReplaceRules(entry: ManuscriptEntry): ReplaceRule[] {
+  let replaceRules: ReplaceRule[] = [];
+  if (entry.theme) {
+    for (const theme of entry.theme) {
+      replaceRules = theme.replace.concat(replaceRules);
     }
   }
   return replaceRules;
 }
 
-function importPreprocess(
-  entry: ManuscriptEntry,
-): ((contents: string) => string)[] | undefined {
-  if (!entry.theme || entry.theme.length == 0) return;
-  let preProcess: ((contents: string) => string)[] | undefined = undefined;
-  for (const theme of entry.theme) {
-    if (theme.scripts) {
-      const replaceFile = path.join(theme.location, theme.scripts);
-      if (fs.existsSync(replaceFile)) {
-        const procs:
-          | ((contents: string) => string)[]
-          | undefined = require(replaceFile).preprocess as
-          | ((contents: string) => string)[]
-          | undefined;
-        if (procs && procs.length > 0) {
-          if (!preProcess) {
-            preProcess = [];
-          }
-          preProcess = preProcess?.concat(procs);
-        }
-      }
+function importPreprocess(entry: ManuscriptEntry): PreProcess[] {
+  let preprocess: PreProcess[] = [];
+  if (entry.theme) {
+    for (const theme of entry.theme) {
+      preprocess = theme.preprocess.concat(preprocess);
     }
   }
-  return preProcess;
+  return preprocess;
 }
 
 export async function compile(
@@ -218,8 +191,8 @@ export async function compile(
     (e): e is ManuscriptEntry => 'source' in e,
   );
 
-  // clear cache if replace.js
-  clearReplaceCache(contentEntries);
+  // clear cache if scripts.js
+  clearScriptsCache(contentEntries);
 
   for (const entry of contentEntries) {
     shelljs.mkdir('-p', path.dirname(entry.target));

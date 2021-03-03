@@ -1,0 +1,22 @@
+{
+  "name": "themeWithReplace",
+  "description": "Replaceテスト",
+  "version": "0.0.1",
+  "author": "John Doe",
+  "files": [
+    "*.css",
+    "example"
+  ],
+  "license": "CC0-1.0",
+  "vivliostyle": {
+    "theme": {
+      "name": "scss",
+      "style": "./theme.css",
+      "scripts": "scripts.js",
+      "category": "sample",
+      "topics": [
+        "REplace"
+      ]
+    }
+  }
+}

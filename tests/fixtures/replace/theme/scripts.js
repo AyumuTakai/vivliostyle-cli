@@ -1,4 +1,4 @@
-exports.replaces = [
+exports.replace = [
   {
     // 強制改ページ
     test: /\[newpage]/g,

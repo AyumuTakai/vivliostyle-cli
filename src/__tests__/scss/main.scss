@@ -1,0 +1,9 @@
+@charset "UTF-8";
+
+@use 'variables' as *;
+
+body {
+  h1 {
+    color: $color;
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "themeWithScss",
+  "description": "SCSSテスト",
+  "version": "0.0.1",
+  "author": "John Doe",
+  "files": [
+    "*.css",
+    "example"
+  ],
+  "license": "CC0-1.0",
+  "vivliostyle": {
+    "theme": {
+      "name": "scss",
+      "style": "./withVars.scss",
+      "category": "sample",
+      "topics": [
+        "SCSS"
+      ]
+    }
+  }
+}

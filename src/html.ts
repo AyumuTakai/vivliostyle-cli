@@ -4,7 +4,7 @@ import toHTML from 'hast-util-to-html';
 import h from 'hastscript';
 import prettier from 'prettier';
 import path from 'upath';
-import { ManuscriptEntry } from './config';
+import { ManuscriptEntry } from './entry';
 
 export function generateTocHtml({
   entries,

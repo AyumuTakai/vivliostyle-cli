@@ -4,7 +4,8 @@ import terminalLink from 'terminal-link';
 import path from 'upath';
 import { URL } from 'url';
 import { Meta, Payload, TOCItem } from './broker';
-import { ManuscriptEntry, MergedConfig } from './config';
+import { MergedConfig } from './config';
+import { ManuscriptEntry } from './entry';
 import { PostProcess } from './postprocess';
 import { getBrokerUrl } from './server';
 import {

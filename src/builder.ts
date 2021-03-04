@@ -1,4 +1,3 @@
-import { ReplaceRule } from '@vivliostyle/vfm/lib/plugins/replace';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import chalk from 'chalk';
@@ -8,14 +7,10 @@ import { imageSize } from 'image-size';
 import { lookup as mime } from 'mime-types';
 import shelljs from 'shelljs';
 import path from 'upath';
-import {
-  ManuscriptEntry,
-  MergedConfig,
-  WebPublicationManifestConfig,
-} from './config';
+import { MergedConfig, WebPublicationManifestConfig } from './config';
 import { TOC_TITLE } from './const';
-import { generateTocHtml, isTocHtml, processManuscriptHtml } from './html';
-import { processMarkdown } from './markdown';
+import { ManuscriptEntry, ParsedEntry } from './entry';
+import { generateTocHtml, isTocHtml } from './html';
 import type {
   PublicationLinks,
   PublicationManifest,
@@ -25,7 +20,7 @@ import {
   publicationSchemas,
 } from './schema/pubManifest.schema';
 import type { EntryObject } from './schema/vivliostyle.config';
-import { ParsedTheme, PreProcess, ThemeManager } from './theme';
+import { ThemeManager } from './theme';
 import { debug, log } from './util';
 
 export function cleanup(location: string) {
@@ -109,7 +104,7 @@ export function generateManifest(
   }
 }
 
-function clearScriptsCache(entries: ManuscriptEntry[]) {
+function clearScriptsCache(entries: ParsedEntry[]) {
   for (const entry of entries) {
     if (!entry.theme || entry.theme.length == 0) continue;
     for (const theme of entry.theme) {
@@ -119,26 +114,6 @@ function clearScriptsCache(entries: ManuscriptEntry[]) {
       }
     }
   }
-}
-
-function importReplaceRules(entry: ManuscriptEntry): ReplaceRule[] {
-  let replaceRules: ReplaceRule[] = [];
-  if (entry.theme) {
-    for (const theme of entry.theme) {
-      replaceRules = theme.replace.concat(replaceRules);
-    }
-  }
-  return replaceRules;
-}
-
-function importPreprocess(entry: ManuscriptEntry): PreProcess[] {
-  let preprocess: PreProcess[] = [];
-  if (entry.theme) {
-    for (const theme of entry.theme) {
-      preprocess = theme.preprocess.concat(preprocess);
-    }
-  }
-  return preprocess;
 }
 
 export async function compile(
@@ -164,15 +139,9 @@ export async function compile(
   ) {
     // workspaceDir is placed on different directory
     cleanup(workspaceDir);
+    // clear cache if scripts.js
+    clearScriptsCache(entries);
   }
-
-  const locateThemePath = (
-    from: string,
-    theme?: ParsedTheme[],
-  ): string[] | undefined => {
-    if (!theme) return;
-    return theme?.map((t) => t.locateThemePath(from));
-  };
 
   const generativeContentsEntry = entries.find(
     (e) => !('source' in e) && e.rel === 'contents',
@@ -191,60 +160,17 @@ export async function compile(
     (e): e is ManuscriptEntry => 'source' in e,
   );
 
-  // clear cache if scripts.js
-  clearScriptsCache(contentEntries);
-
   for (const entry of contentEntries) {
-    shelljs.mkdir('-p', path.dirname(entry.target));
-
-    // copy theme
-    const themeManager = themeIndexes as ThemeManager;
-    themeManager.copyThemes();
-
-    // calculate style path
-    const style = locateThemePath(path.dirname(entry.target), entry.theme);
-    if (entry.type === 'text/markdown') {
-      const replaceRules = importReplaceRules(entry);
-      const preprocess = importPreprocess(entry);
-      // compile markdown
-      const vfile = await processMarkdown(
-        entry.source,
-        {
-          style,
-          title: entry.title,
-          language: language ?? undefined,
-          replace: replaceRules,
-        },
-        preprocess,
-      );
-      const compiledEntry = String(vfile);
-      fs.writeFileSync(entry.target, compiledEntry);
-    } else if (
-      entry.type === 'text/html' ||
-      entry.type === 'application/xhtml+xml'
-    ) {
-      if (entry.source !== entry.target) {
-        const html = processManuscriptHtml(entry.source, {
-          style,
-          title: entry.title,
-          contentType: entry.type,
-          language,
-        });
-        fs.writeFileSync(entry.target, html);
-      }
-    } else {
-      if (entry.source !== entry.target) {
-        shelljs.cp(entry.source, entry.target);
-      }
-    }
+    await entry.copyContent(language);
   }
 
   // copy theme
-  (themeIndexes as ThemeManager).copyThemes();
+  const themeManager = themeIndexes as ThemeManager;
+  themeManager.copyThemes();
 
   // generate toc
   if (generativeContentsEntry) {
-    const style = locateThemePath(workspaceDir, generativeContentsEntry.theme);
+    const style = generativeContentsEntry.locateThemePath(workspaceDir);
     const tocString = generateTocHtml({
       entries: contentEntries,
       manifestPath,

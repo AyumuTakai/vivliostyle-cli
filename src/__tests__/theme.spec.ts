@@ -17,6 +17,8 @@ it('test parse UriTheme', () => {
   const uriTheme = UriTheme.parse(locator);
 
   expect(uriTheme).toBeDefined();
+  const from = '';
+  expect(uriTheme?.locateThemePath(from)).toEqual(['http://example.jp']);
 });
 
 it('test parse FileTheme', () => {
@@ -39,7 +41,15 @@ it('test parse PackageTheme', () => {
   const packageTheme = PackageTheme.parse(locator, contextDir, workspaceDir);
 
   expect(packageTheme).toBeDefined();
-  expect(packageTheme?.style).toBe('./theme.css');
+  expect(packageTheme?.style).toEqual(['./theme.css']);
+
+  // package has array of style
+  const locator2 = './theme_ms';
+  const contextDir2 = __dirname;
+  const packageTheme2 = PackageTheme.parse(locator2, contextDir2, workspaceDir);
+
+  expect(packageTheme2).toBeDefined();
+  expect(packageTheme2?.style).toEqual(['theme.css', 'theme2.css']);
 });
 
 it('test ThemeManager', () => {
@@ -55,7 +65,7 @@ it('test import preprocess scripts', () => {
   const packageTheme = PackageTheme.parse(locator, contextDir, workspaceDir);
   expect(packageTheme).toBeDefined();
   expect(packageTheme?.scripts).toBe('scripts.js');
-  expect(packageTheme?.preprocess.length).toBe(1);
+  expect(packageTheme?.preprocess).toBeDefined();
 });
 
 it('test import replace rules', () => {
@@ -110,7 +120,7 @@ it('test scss transpile in PackageTheme', () => {
   const packageTheme = PackageTheme.parse(locator, contextDir, workspaceDir);
 
   expect(packageTheme).toBeDefined();
-  expect(packageTheme?.style).toBe('./withVars.scss');
+  expect(packageTheme?.style).toEqual(['./withVars.scss']);
 
   packageTheme?.copyTheme();
 

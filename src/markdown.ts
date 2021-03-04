@@ -1,5 +1,4 @@
 import { StringifyMarkdownOptions, VFM } from '@vivliostyle/vfm';
-import fs from 'fs';
 import vfile, { VFile } from 'vfile';
 
 export interface VSFile extends VFile {
@@ -9,29 +8,11 @@ export interface VSFile extends VFile {
   };
 }
 
-export type PreProcess = (filepath: string, contents: string) => string;
-
-function getContents(
-  filepath: string,
-  preprocess: PreProcess[] | undefined,
-): string {
-  let contents = fs.readFileSync(filepath, 'utf8');
-  if (contents && preprocess) {
-    for (const proc of preprocess) {
-      contents = proc(filepath, contents);
-    }
-  }
-  return contents;
-}
-
 export function processMarkdown(
-  filepath: string,
+  input: { path: string; contents: string },
   options: StringifyMarkdownOptions = {},
-  preprocess: PreProcess[] | undefined = undefined,
 ): VSFile {
   const vfm = VFM(options);
-  const processed = vfm.processSync(
-    vfile({ path: filepath, contents: getContents(filepath, preprocess) }),
-  ) as VSFile;
+  const processed = vfm.processSync(vfile(input)) as VSFile;
   return processed;
 }

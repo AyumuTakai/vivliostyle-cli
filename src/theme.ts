@@ -21,13 +21,13 @@ export class Theme {
   name: string;
   location: string;
   scripts?: string;
-  preprocess: PreProcess[];
+  preprocess: PreProcess | undefined;
   replace: ReplaceRule[];
 
   public constructor(name: string, location: string) {
     this.name = name;
     this.location = location;
-    this.preprocess = [];
+    this.preprocess = undefined;
     this.replace = [];
   }
 
@@ -44,9 +44,9 @@ export class Theme {
    *
    * @param from
    */
-  public locateThemePath(from: string): string {
+  public locateThemePath(from: string): string[] {
     // subclasses must implement
-    return '';
+    return [];
   }
 
   /**
@@ -101,8 +101,8 @@ export class UriTheme extends Theme {
    * @param from
    * @return uri string
    */
-  public locateThemePath(from: string): string {
-    return this.location;
+  public locateThemePath(from: string): string[] {
+    return [this.location];
   }
 
   /**
@@ -146,8 +146,8 @@ export class FileTheme extends Theme {
    * ThemePath(relative path)
    * @param from
    */
-  public locateThemePath(from: string): string {
-    return path.relative(from, this.destination);
+  public locateThemePath(from: string): string[] {
+    return [path.relative(from, this.destination)];
   }
 
   /**
@@ -194,7 +194,7 @@ export class FileTheme extends Theme {
 export class PackageTheme extends Theme {
   type: 'package' = 'package';
   destination: string;
-  style: string;
+  style: string[];
 
   /**
    *
@@ -208,18 +208,18 @@ export class PackageTheme extends Theme {
     name: string,
     location: string,
     destination: string,
-    style: string,
+    style: string | string[],
     scripts?: string,
   ) {
     super(name, location);
     this.destination = destination;
-    this.style = style;
+    this.style = Array.isArray(style) ? style : [style];
     this.scripts = scripts;
     if (this.scripts) {
       const scriptsPath = path.resolve(this.location, this.scripts);
       const script = require(scriptsPath);
       if (script) {
-        this.preprocess = script.preprocess ?? [];
+        this.preprocess = script.preprocess ?? undefined;
         this.replace = script.replace ?? [];
       }
     }
@@ -265,8 +265,10 @@ export class PackageTheme extends Theme {
    *
    * @param from
    */
-  public locateThemePath(from: string): string {
-    return path.relative(from, path.join(this.destination, this.style));
+  public locateThemePath(from: string): string[] {
+    return this.style.map((sty) => {
+      return path.relative(from, path.join(this.destination, sty));
+    });
   }
 
   /**
@@ -275,15 +277,17 @@ export class PackageTheme extends Theme {
   public copyTheme() {
     shelljs.mkdir('-p', this.destination);
     shelljs.cp('-r', path.join(this.location, '*'), this.destination);
-
-    if (this.style.endsWith('.scss')) {
-      const src = path.resolve(this.location, this.style);
-      this.style = this.style.replace(/.scss$/, '.css');
-      const dst = path.resolve(this.destination, this.style);
-      const css = Theme.transpileSass(src);
-      shelljs.mkdir('-p', path.dirname(dst));
-      fs.writeFileSync(dst, css);
-    }
+    this.style = this.style.map((sty) => {
+      if (sty.endsWith('.scss')) {
+        const src = path.resolve(this.location, sty);
+        sty = sty.replace(/.scss$/, '.css');
+        const dst = path.resolve(this.destination, sty);
+        const css = Theme.transpileSass(src);
+        shelljs.mkdir('-p', path.dirname(dst));
+        fs.writeFileSync(dst, css);
+      }
+      return sty;
+    });
   }
 
   /**

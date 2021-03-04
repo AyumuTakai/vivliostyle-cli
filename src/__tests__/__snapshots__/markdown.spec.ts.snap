@@ -30,36 +30,6 @@ VFile {
 }
 `;
 
-exports[`test processMarkdown with a preprocess script 1`] = `
-VFile {
-  "contents": "<!doctype html>
-<html>
-  <head>
-    <meta charset=\\"utf-8\\">
-    <title>markdown</title>
-    <meta name=\\"viewport\\" content=\\"width=device-width, initial-scale=1\\">
-  </head>
-  <body>
-    <section id=\\"headings\\">
-      <h1>headings</h1>
-      <p>preprocessed</p>
-      <p>replace</p>
-    </section>
-  </body>
-</html>
-",
-  "cwd": "/Users/takaiayumu/IdeaProjects/vivliostyle-cli",
-  "data": Object {
-    "title": "headings",
-    "toc": false,
-  },
-  "history": Array [
-    "/Users/takaiayumu/IdeaProjects/vivliostyle-cli/src/__tests__/markdown.md",
-  ],
-  "messages": Array [],
-}
-`;
-
 exports[`test processMarkdown with a replace rule 1`] = `
 VFile {
   "contents": "<!doctype html>
@@ -74,36 +44,6 @@ VFile {
       <h1>headings</h1>
       <p>preprocess</p>
       <p><span>replaced</span></p>
-    </section>
-  </body>
-</html>
-",
-  "cwd": "/Users/takaiayumu/IdeaProjects/vivliostyle-cli",
-  "data": Object {
-    "title": "headings",
-    "toc": false,
-  },
-  "history": Array [
-    "/Users/takaiayumu/IdeaProjects/vivliostyle-cli/src/__tests__/markdown.md",
-  ],
-  "messages": Array [],
-}
-`;
-
-exports[`test processMarkdown with empty preprocess scripts array 1`] = `
-VFile {
-  "contents": "<!doctype html>
-<html>
-  <head>
-    <meta charset=\\"utf-8\\">
-    <title>markdown</title>
-    <meta name=\\"viewport\\" content=\\"width=device-width, initial-scale=1\\">
-  </head>
-  <body>
-    <section id=\\"headings\\">
-      <h1>headings</h1>
-      <p>preprocess</p>
-      <p>replace</p>
     </section>
   </body>
 </html>

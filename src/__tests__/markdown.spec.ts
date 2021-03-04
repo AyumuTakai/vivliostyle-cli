@@ -1,37 +1,45 @@
+import * as fs from 'fs';
 import path from 'upath';
-import { PreProcess, processMarkdown, VSFile } from '../markdown';
+import { processMarkdown } from '../markdown';
 
 it('test processMarkdown', () => {
   const filepath = path.resolve(__dirname, 'markdown.md');
-  const processed = processMarkdown(filepath);
+  const contents = fs.readFileSync(filepath, 'utf-8');
+  const processed = processMarkdown({ path: filepath, contents: contents });
   expect(processed).toMatchSnapshot();
 });
 
-it('test processMarkdown with empty preprocess scripts array', () => {
-  const filepath: string = path.resolve(__dirname, 'markdown.md');
-  const preprocess: PreProcess[] = [];
-  const processed: VSFile = processMarkdown(filepath, undefined, preprocess);
-  expect(processed).toMatchSnapshot();
-});
+// Preprocess move to entry.ts
+// it('test processMarkdown with empty preprocess scripts array', () => {
+//   const filepath: string = path.resolve(__dirname, 'markdown.md');
+//   const preprocess: PreProcess[] = [];
+//   const processed: VSFile = processMarkdown(filepath, undefined, preprocess);
+//   expect(processed).toMatchSnapshot();
+// });
 
-it('test processMarkdown with a preprocess script', () => {
-  const filepath: string = path.resolve(__dirname, 'markdown.md');
-  const preprocess: PreProcess[] = [
-    (filepath: string, contents: string) => {
-      contents = contents.replace(/preprocess/, 'preprocessed');
-      return contents;
-    },
-  ];
-  const processed: VSFile = processMarkdown(filepath, undefined, preprocess);
-  expect(processed).toMatchSnapshot();
-});
+// Preprocess move to entry.ts
+// it('test processMarkdown with a preprocess script', () => {
+//   const filepath: string = path.resolve(__dirname, 'markdown.md');
+//   const preprocess: PreProcess[] = [
+//     (filepath: string, contents: string) => {
+//       contents = contents.replace(/preprocess/, 'preprocessed');
+//       return contents;
+//     },
+//   ];
+//   const processed: VSFile = processMarkdown(filepath, undefined, preprocess);
+//   expect(processed).toMatchSnapshot();
+// });
 
 it('test processMarkdown with empty replace rule', () => {
   const filepath = path.resolve(__dirname, 'markdown.md');
   const options = {
     replace: [],
   };
-  const processed = processMarkdown(filepath, options);
+  const contents = fs.readFileSync(filepath, 'utf-8');
+  const processed = processMarkdown(
+    { path: filepath, contents: contents },
+    options,
+  );
   expect(processed).toMatchSnapshot();
 });
 
@@ -48,6 +56,10 @@ it('test processMarkdown with a replace rule', () => {
       },
     ],
   };
-  const processed = processMarkdown(filepath, options);
+  const contents = fs.readFileSync(filepath, 'utf-8');
+  const processed = processMarkdown(
+    { path: filepath, contents: contents },
+    options,
+  );
   expect(processed).toMatchSnapshot();
 });

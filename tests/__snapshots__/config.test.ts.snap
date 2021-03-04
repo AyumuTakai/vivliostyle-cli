@@ -258,28 +258,29 @@ exports[`override option by CLI command: valid.1.config.js 1`] = `
 Object {
   "cover": "__WORKSPACE__/tests/fixtures/config/cover.png",
   "entries": Array [
-    Object {
+    ContentsEntry {
       "rel": "contents",
       "target": "__WORKSPACE__/tests/fixtures/config/workspaceDir/toc.html",
       "theme": Array [
         UriTheme {
           "location": "https://myTheme.example.com",
           "name": "myTheme.example.com",
-          "preprocess": Array [],
+          "preprocess": undefined,
           "replace": Array [],
           "type": "uri",
         },
       ],
       "title": "Table of Contents",
     },
-    Object {
+    ManuscriptEntry {
+      "rel": undefined,
       "source": "__WORKSPACE__/tests/fixtures/config/manuscript.md",
       "target": "__WORKSPACE__/tests/fixtures/config/workspaceDir/manuscript.html",
       "theme": Array [
         UriTheme {
           "location": "https://myTheme.example.com",
           "name": "myTheme.example.com",
-          "preprocess": Array [],
+          "preprocess": undefined,
           "replace": Array [],
           "type": "uri",
         },
@@ -287,7 +288,8 @@ Object {
       "title": "myTitle",
       "type": "text/markdown",
     },
-    Object {
+    ManuscriptEntry {
+      "rel": undefined,
       "source": "__WORKSPACE__/tests/fixtures/config/manuscript.md",
       "target": "__WORKSPACE__/tests/fixtures/config/workspaceDir/manuscript.html",
       "theme": Array [
@@ -295,7 +297,7 @@ Object {
           "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/theme.css",
           "location": "__WORKSPACE__/tests/fixtures/config/theme.css",
           "name": "theme.css",
-          "preprocess": Array [],
+          "preprocess": undefined,
           "replace": Array [],
           "type": "file",
         },
@@ -349,7 +351,7 @@ Object {
     UriTheme {
       "location": "https://myTheme.example.com",
       "name": "myTheme.example.com",
-      "preprocess": Array [],
+      "preprocess": undefined,
       "replace": Array [],
       "type": "uri",
     },
@@ -357,7 +359,7 @@ Object {
       "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/theme.css",
       "location": "__WORKSPACE__/tests/fixtures/config/theme.css",
       "name": "theme.css",
-      "preprocess": Array [],
+      "preprocess": undefined,
       "replace": Array [],
       "type": "file",
     },
@@ -372,7 +374,7 @@ exports[`parse vivliostyle config: valid.1.config.js 1`] = `
 Object {
   "cover": "__WORKSPACE__/tests/fixtures/config/cover.png",
   "entries": Array [
-    Object {
+    ContentsEntry {
       "rel": "contents",
       "target": "__WORKSPACE__/tests/fixtures/config/workspaceDir/toc.html",
       "theme": Array [
@@ -380,16 +382,19 @@ Object {
           "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/themes/packages/debug-theme",
           "location": "__WORKSPACE__/tests/fixtures/themes/debug-theme",
           "name": "debug-theme",
-          "preprocess": Array [],
+          "preprocess": undefined,
           "replace": Array [],
           "scripts": undefined,
-          "style": "./theme.css",
+          "style": Array [
+            "./theme.css",
+          ],
           "type": "package",
         },
       ],
       "title": "Table of Contents",
     },
-    Object {
+    ManuscriptEntry {
+      "rel": undefined,
       "source": "__WORKSPACE__/tests/fixtures/config/manuscript.md",
       "target": "__WORKSPACE__/tests/fixtures/config/workspaceDir/manuscript.html",
       "theme": Array [
@@ -397,17 +402,20 @@ Object {
           "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/themes/packages/debug-theme",
           "location": "__WORKSPACE__/tests/fixtures/themes/debug-theme",
           "name": "debug-theme",
-          "preprocess": Array [],
+          "preprocess": undefined,
           "replace": Array [],
           "scripts": undefined,
-          "style": "./theme.css",
+          "style": Array [
+            "./theme.css",
+          ],
           "type": "package",
         },
       ],
       "title": "title",
       "type": "text/markdown",
     },
-    Object {
+    ManuscriptEntry {
+      "rel": undefined,
       "source": "__WORKSPACE__/tests/fixtures/config/manuscript.md",
       "target": "__WORKSPACE__/tests/fixtures/config/workspaceDir/manuscript.html",
       "theme": Array [
@@ -415,7 +423,7 @@ Object {
           "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/theme.css",
           "location": "__WORKSPACE__/tests/fixtures/config/theme.css",
           "name": "theme.css",
-          "preprocess": Array [],
+          "preprocess": undefined,
           "replace": Array [],
           "type": "file",
         },
@@ -470,17 +478,19 @@ Object {
       "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/themes/packages/debug-theme",
       "location": "__WORKSPACE__/tests/fixtures/themes/debug-theme",
       "name": "debug-theme",
-      "preprocess": Array [],
+      "preprocess": undefined,
       "replace": Array [],
       "scripts": undefined,
-      "style": "./theme.css",
+      "style": Array [
+        "./theme.css",
+      ],
       "type": "package",
     },
     FileTheme {
       "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/theme.css",
       "location": "__WORKSPACE__/tests/fixtures/config/theme.css",
       "name": "theme.css",
-      "preprocess": Array [],
+      "preprocess": undefined,
       "replace": Array [],
       "type": "file",
     },
@@ -495,7 +505,8 @@ exports[`parse vivliostyle config: valid.2.config.js 1`] = `
 Object {
   "cover": undefined,
   "entries": Array [
-    Object {
+    ManuscriptEntry {
+      "rel": undefined,
       "source": "__WORKSPACE__/tests/fixtures/config/manuscript.md",
       "target": "__WORKSPACE__/tests/fixtures/config/manuscript.html",
       "theme": Array [],
@@ -549,7 +560,8 @@ exports[`parse vivliostyle config: valid.3.config.js 1`] = `
 Object {
   "cover": undefined,
   "entries": Array [
-    Object {
+    ManuscriptEntry {
+      "rel": undefined,
       "source": "__WORKSPACE__/tests/fixtures/config/manuscript.md",
       "target": "__WORKSPACE__/tests/fixtures/config/manuscript.html",
       "theme": Array [],
@@ -603,7 +615,8 @@ exports[`yields a config with single input and vivliostyle config 1`] = `
 Object {
   "cover": "__WORKSPACE__/tests/fixtures/config/cover.png",
   "entries": Array [
-    Object {
+    ManuscriptEntry {
+      "rel": undefined,
       "source": "__WORKSPACE__/tests/fixtures/config/sample.md",
       "target": "__SNIP__",
       "theme": Array [
@@ -611,10 +624,12 @@ Object {
           "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/themes/packages/debug-theme",
           "location": "__WORKSPACE__/tests/fixtures/themes/debug-theme",
           "name": "debug-theme",
-          "preprocess": Array [],
+          "preprocess": undefined,
           "replace": Array [],
           "scripts": undefined,
-          "style": "./theme.css",
+          "style": Array [
+            "./theme.css",
+          ],
           "type": "package",
         },
       ],
@@ -668,10 +683,12 @@ Object {
       "destination": "__WORKSPACE__/tests/fixtures/config/workspaceDir/themes/packages/debug-theme",
       "location": "__WORKSPACE__/tests/fixtures/themes/debug-theme",
       "name": "debug-theme",
-      "preprocess": Array [],
+      "preprocess": undefined,
       "replace": Array [],
       "scripts": undefined,
-      "style": "./theme.css",
+      "style": Array [
+        "./theme.css",
+      ],
       "type": "package",
     },
   ],
@@ -685,7 +702,8 @@ exports[`yields a config with single markdown 1`] = `
 Object {
   "cover": undefined,
   "entries": Array [
-    Object {
+    ManuscriptEntry {
+      "rel": undefined,
       "source": "__WORKSPACE__/tests/fixtures/config/sample.md",
       "target": "__SNIP__",
       "theme": Array [],

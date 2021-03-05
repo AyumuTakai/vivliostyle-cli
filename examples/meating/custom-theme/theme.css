@@ -2,9 +2,19 @@ section {
     width: 100%;
 }
 
+@page {
+    @top-right-corner {
+        margin-top: 7mm;
+        margin-bottom: 1mm;
+        margin-left: -10mm;
+        content: counters(page,' / ',pages);
+    }
+}
+
 @page:nth(2) {
     counter-reset: page 0;
 }
+
 body > section {
     page-break-inside: auto;
     padding-top: 2mm;

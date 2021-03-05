@@ -1,15 +1,15 @@
 module.exports = {
-  title: '複数のテーマを適用する機能',
-  author: 'Jhon Doe',
+  title: 'meating_slide_202103',
+  author: 'Ayumu Takai',
   language: 'ja',
   size: 'A4 landscape',
   theme: [
-    "@vivliostyle/theme-slide",
-    "./custom-theme"
+    '@vivliostyle/theme-slide',
+    './custom-theme'
   ],
   entry: [
     'paper.md',
   ],
-  output: 'paper.pdf',
-  workspaceDir: ".vivliostyle",
+  output: 'meating_slide_202103.pdf',
+  workspaceDir: '.vivliostyle',
 };

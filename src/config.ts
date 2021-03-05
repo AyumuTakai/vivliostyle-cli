@@ -1,5 +1,6 @@
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
+import { ErrorObject } from 'ajv/lib/types/index';
 import chalk from 'chalk';
 import cheerio from 'cheerio';
 import fs from 'fs';
@@ -158,6 +159,31 @@ function parseFileMetadata(
   return { title, theme };
 }
 
+interface AjvError {
+  keyword: string;
+  dataPath: string;
+  schemaPath: string;
+  params: object;
+  message: string;
+}
+
+function formatAjvErrors(errors: ErrorObject[] | undefined | null): string[] {
+  if (!errors) return [];
+  const errorDict: { [name: string]: string[] } = {};
+  for (const error of errors) {
+    if (!errorDict[error.dataPath]) {
+      errorDict[error.dataPath] = [];
+    }
+    if (error.params.type) {
+      // add type error only
+      errorDict[error.dataPath].push(error.params.type);
+    }
+  }
+  return Object.entries(errorDict).map(
+    (messages) => `${messages[0]} should be ${messages[1].join(' | ')}`,
+  );
+}
+
 export function collectVivliostyleConfig<T extends CliFlags>(
   cliFlags: T,
 ): {
@@ -175,8 +201,9 @@ export function collectVivliostyleConfig<T extends CliFlags>(
     addFormats(ajv);
     const valid = ajv.validate(configSchema, config);
     if (!valid) {
+      const errors = '\n\t' + formatAjvErrors(ajv.errors).join('\n\t') + '\n';
       throw new Error(
-        `Validation of vivliostyle.config failed. Please check the schema: ${configPath}`,
+        `Validation of vivliostyle.config failed. Please check the schema: ${configPath}${errors}`,
       );
     }
     return config;

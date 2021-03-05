@@ -6,18 +6,18 @@ module.exports = {
   theme: [
     '@vivliostyle/theme-bunko',
     // 'sub-theme.css',
-    // 'openJTalk',
-    // 'textlint',
     // 'emojicat',
-    // 'emojihand'
+    // 'emojihand',
+    // 'textlint',
+    // 'openJTalk',
   ],
   entry: [
     'bunko.md',
     {
-      path: './yume.md',
+      path: './yume.html',
       theme: [
         '@vivliostyle/theme-bunko',
-        // 'sub-theme2.css',
+        'sub-theme2.css',
         // 'textlint'
       ],
     },

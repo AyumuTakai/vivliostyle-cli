@@ -8,10 +8,18 @@ module.exports = {
     {
       path:'cover.md',
       theme: ['A4book.css','cover.css'],
+      // SCSS変数の導入で以下のように書けるようにする
+      // vars: [
+      //   cover: true,
+      // ]
     },
     {
       path:'bunko.md',
       theme: ['A4book.css','2column.css','startpage.css'],
+      // SCSS変数の導入で以下のように書けるようにする
+      // vars: [
+      //   startpage: 1,
+      // ]
     },
     {
       path:'yume.md',

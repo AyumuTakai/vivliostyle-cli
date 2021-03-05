@@ -1,0 +1,15 @@
+section {
+    width: 100%;
+}
+
+@page:nth(2) {
+    counter-reset: page 0;
+}
+body > section {
+    page-break-inside: auto;
+    padding-top: 2mm;
+}
+body > section:nth-of-type(n+2) h1 {
+    position: absolute;
+    top: 0mm;
+}

@@ -22,13 +22,13 @@ export class Theme {
   location: string;
   scripts?: string;
   preprocess: PreProcess | undefined;
-  replace: ReplaceRule[];
+  replaces: ReplaceRule[];
 
   public constructor(name: string, location: string) {
     this.name = name;
     this.location = location;
     this.preprocess = undefined;
-    this.replace = [];
+    this.replaces = [];
   }
 
   /**
@@ -220,7 +220,7 @@ export class PackageTheme extends Theme {
       const script = require(scriptsPath);
       if (script) {
         this.preprocess = script.preprocess ?? undefined;
-        this.replace = script.replace ?? [];
+        this.replaces = script.replaces ?? [];
       }
     }
   }

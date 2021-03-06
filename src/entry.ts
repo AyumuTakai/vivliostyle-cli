@@ -37,7 +37,7 @@ export class Entry {
     let replaceRules: ReplaceRule[] = [];
     if (this.theme) {
       for (const theme of this.theme) {
-        replaceRules = theme.replace.concat(replaceRules);
+        replaceRules = theme.replaces.concat(replaceRules);
       }
     }
     return replaceRules;

@@ -1,9 +1,0 @@
-{
-  "name": "meating",
-  "version": "1.0.0",
-  "main": "index.js",
-  "license": "MIT",
-  "dependencies": {
-    "@vivliostyle/theme-slide": "^0.3.0"
-  }
-}

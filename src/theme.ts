@@ -12,7 +12,10 @@ import {
 const sass = require('sass');
 
 export type ParsedTheme = UriTheme | FileTheme | PackageTheme;
-export type PreProcess = (filename: string, contents: string) => string;
+export type PreProcess = (
+  filename: string,
+  contents: string,
+) => Promise<string>;
 
 /**
  * Theme base class

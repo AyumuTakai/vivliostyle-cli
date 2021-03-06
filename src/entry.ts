@@ -78,15 +78,17 @@ export class ManuscriptEntry extends Entry {
     this.rel = rel;
   }
 
-  public getContents(
+  public async getContents(
     filepath: string,
     preprocess: PreProcess[] | undefined,
-  ): string {
+  ): Promise<string> {
     let contents = fs.readFileSync(filepath, 'utf8');
     if (contents && preprocess) {
       for (const proc of preprocess) {
-        if (proc) {
-          contents = proc(filepath, contents);
+        if (proc && typeof proc === 'function') {
+          contents = await proc(filepath, contents);
+        } else {
+          console.log('\nproprocess error (' + typeof proc + '):' + proc);
         }
       }
     }
@@ -103,7 +105,7 @@ export class ManuscriptEntry extends Entry {
     if (this.type === 'text/markdown') {
       const replaceRules = this.importReplaceRules();
       const preprocess = this.importPreprocess();
-      const contents = this.getContents(this.source, preprocess);
+      const contents = await this.getContents(this.source, preprocess);
       // compile markdown
       const vfile = await processMarkdown(
         { path: this.source, contents: contents },

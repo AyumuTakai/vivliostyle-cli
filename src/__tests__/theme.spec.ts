@@ -75,7 +75,7 @@ it('test import replace rules', () => {
   const packageTheme = PackageTheme.parse(locator, contextDir, workspaceDir);
   expect(packageTheme).toBeDefined();
   expect(packageTheme?.scripts).toBe('scripts.js');
-  expect(packageTheme?.replace.length).toBe(1);
+  expect(packageTheme?.replaces.length).toBe(1);
 });
 
 it('test scss transpile', () => {

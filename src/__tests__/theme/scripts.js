@@ -5,7 +5,7 @@ exports.preprocess = [
   },
 ];
 
-exports.replace = [
+exports.replaces = [
   {
     test: /replace/,
     match: ([], h) => {

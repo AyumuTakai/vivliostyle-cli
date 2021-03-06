@@ -21,7 +21,7 @@ import {
 } from './schema/pubManifest.schema';
 import type { EntryObject } from './schema/vivliostyle.config';
 import { ThemeManager } from './theme';
-import { debug, log } from './util';
+import { debug, log, pathStartsWith } from './util';
 
 export function cleanup(location: string) {
   debug('cleanup file', location);
@@ -133,10 +133,7 @@ export async function compile(
   debug('entries', entries);
   debug('themes', themeIndexes);
 
-  if (
-    !reload &&
-    path.relative(workspaceDir, entryContextDir).startsWith('..')
-  ) {
+  if (!reload && !pathStartsWith(entryContextDir, workspaceDir)) {
     // workspaceDir is placed on different directory
     cleanup(workspaceDir);
     // clear cache if scripts.js
@@ -159,7 +156,6 @@ export async function compile(
   const contentEntries = entries.filter(
     (e): e is ManuscriptEntry => 'source' in e,
   );
-
   for (const entry of contentEntries) {
     await entry.copyContent(language);
   }
@@ -233,12 +229,12 @@ export function checkOverwriteViolation(
   target: string,
   fileInformation: string,
 ) {
-  if (!path.relative(target, entryContextDir).startsWith('..')) {
+  if (pathStartsWith(entryContextDir, target)) {
     throw new Error(
       `${target} is set as output destination of ${fileInformation}, however, this output path will overwrite the manuscript file(s). Please specify other paths.`,
     );
   }
-  if (!path.relative(target, workspaceDir).startsWith('..')) {
+  if (pathStartsWith(workspaceDir, target)) {
     throw new Error(
       `${target} is set as output destination of ${fileInformation}, however, this output path will overwrite the working directory of Vivliostyle. Please specify other paths.`,
     );

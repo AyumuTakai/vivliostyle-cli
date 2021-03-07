@@ -8,6 +8,7 @@ import {
   cwd,
   debug,
   gracefulError,
+  isHttpURL,
   launchBrowser,
   logSuccess,
   pathStartsWith,
@@ -98,7 +99,7 @@ export default async function preview(cliFlags: PreviewCliFlags) {
     }, 2000);
   }
 
-  if (/https?:\/\//.test(config.input.entry)) {
+  if (isHttpURL(config.input.entry)) {
     return;
   }
 
@@ -126,14 +127,7 @@ export default async function preview(cliFlags: PreviewCliFlags) {
         ) {
           return true; // ignore md or html files not in entries source
         }
-        if (
-          config.themeIndexes.find((theme) =>
-            theme.type === 'file'
-              ? path === theme.destination
-              : theme.type === 'package' &&
-                pathStartsWith(path, theme.destination),
-          )
-        ) {
+        if (config.themeIndexes.find((theme) => theme.destinationIs(path))) {
           return true; // ignore copied theme files
         }
         return false;

@@ -189,3 +189,12 @@ export function pathStartsWith(path1: string, path2: string): boolean {
   const path2n = upath.normalize(path2).replace(/\/?$/, '/');
   return path1n.startsWith(path2n);
 }
+
+/**
+ * check HTTP(S) url string
+ * @param str
+ * @private
+ */
+export function isHttpURL(str: string) {
+  return /^https?:\/\//.test(str);
+}

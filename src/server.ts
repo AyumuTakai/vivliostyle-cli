@@ -1,6 +1,6 @@
 import path from 'upath';
 import { URL } from 'url';
-import { encodeHashParameter } from './util';
+import { encodeHashParameter, isHttpURL } from './util';
 
 export type LoadMode = 'document' | 'book';
 export type PageSize = { format: string } | { width: string; height: string };
@@ -15,7 +15,7 @@ export function getBrokerUrl({
   outputSize?: PageSize;
 }) {
   let sourceUrl: URL;
-  if (/https?:\/\//.test(sourceIndex)) {
+  if (isHttpURL(sourceIndex)) {
     sourceUrl = new URL(sourceIndex);
   } else {
     sourceUrl = new URL('file://');

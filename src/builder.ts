@@ -10,7 +10,6 @@ import path from 'upath';
 import {
   ManuscriptEntry,
   MergedConfig,
-  ParsedTheme,
   WebPublicationManifestConfig,
 } from './config';
 import { TOC_TITLE } from './const';
@@ -130,20 +129,6 @@ export async function compile(
     cleanup(workspaceDir);
   }
 
-  const locateThemePath = (
-    from: string,
-    theme?: ParsedTheme,
-  ): string | undefined => {
-    switch (theme?.type) {
-      case 'uri':
-        return theme.location;
-      case 'file':
-        return path.relative(from, theme.destination);
-      case 'package':
-        return path.relative(from, path.join(theme.destination, theme.style));
-    }
-  };
-
   const generativeContentsEntry = entries.find(
     (e) => !('source' in e) && e.rel === 'contents',
   );
@@ -164,7 +149,9 @@ export async function compile(
     shelljs.mkdir('-p', path.dirname(entry.target));
 
     // calculate style path
-    const style = locateThemePath(path.dirname(entry.target), entry.theme);
+    const style: string[] | undefined = entry.theme?.locatePath(
+      path.dirname(entry.target),
+    );
     if (entry.type === 'text/markdown') {
       // compile markdown
       const vfile = processMarkdown(entry.source, {
@@ -196,20 +183,12 @@ export async function compile(
 
   // copy theme
   for (const theme of themeIndexes) {
-    if (theme.type === 'file') {
-      if (theme.location !== theme.destination) {
-        shelljs.mkdir('-p', path.dirname(theme.destination));
-        shelljs.cp(theme.location, theme.destination);
-      }
-    } else if (theme.type === 'package') {
-      shelljs.mkdir('-p', theme.destination);
-      shelljs.cp('-r', path.join(theme.location, '*'), theme.destination);
-    }
+    theme.copyTheme();
   }
 
   // generate toc
   if (generativeContentsEntry) {
-    const style = locateThemePath(workspaceDir, generativeContentsEntry.theme);
+    const style = generativeContentsEntry.theme?.locatePath(workspaceDir);
     const tocString = generateTocHtml({
       entries: contentEntries,
       manifestPath,

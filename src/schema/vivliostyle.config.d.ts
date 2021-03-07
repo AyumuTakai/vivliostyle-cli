@@ -39,14 +39,14 @@ export interface CoreProps {
 export interface EntryObject {
   path: string;
   title?: string;
-  theme?: string;
+  theme?: string | string[];
   encodingFormat?: string;
   rel?: string | string[];
 }
 export interface ContentsEntryObject {
   rel: 'contents';
   title?: string;
-  theme?: string;
+  theme?: string | string[];
 }
 export interface OutputObject {
   path: string;

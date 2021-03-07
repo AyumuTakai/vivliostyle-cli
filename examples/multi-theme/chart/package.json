@@ -1,0 +1,26 @@
+{
+  "name": "@vivliostyle/extends-chart",
+  "version": "1.0.0",
+  "description": "vivliostyle chart plugin.",
+  "main": "scripts.js",
+  "license": "MIT",
+  "files": [
+    "*.css",
+    "*.js"
+  ],
+  "dependencies": {
+    "chartjs-to-image": "^1.0.4"
+  },
+  "vivliostyle": {
+    "theme": {
+      "name": "chart plugin",
+      "style": "theme.css",
+      "category": "extends",
+      "scripts": "scripts.js",
+      "topics": [
+        "グラフ",
+        "chart"
+      ]
+    }
+  }
+}

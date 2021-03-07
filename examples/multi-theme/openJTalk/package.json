@@ -1,20 +1,25 @@
 {
-  "name": "openjtalk_plugin",
+  "name": "@vivliostyle/extends-openjtalk",
   "version": "1.0.0",
   "description": "vivliostyle OpenJTalk plugin.",
   "main": "index.js",
   "license": "MIT",
   "dependencies": {
-    "openjtalk": "^0.1.6"
+    "openjtalk": "^0.1.6",
+    "date-utils": "^1.2.21"
   },
+  "files": [
+    "*.css",
+    "*.js"
+  ],
   "vivliostyle": {
     "theme": {
       "name": "OpenJTalk plugin",
       "style": "./theme.css",
-      "category": "replace",
+      "category": "extends",
       "scripts": "scripts.js",
       "topics": [
-        "リプレイス",
+        "プリプロセス",
         "校正",
         "OpenJTalk"
       ]

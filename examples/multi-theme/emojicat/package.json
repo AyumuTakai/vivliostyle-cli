@@ -1,8 +1,8 @@
 {
-  "name": "sub-theme3",
+  "name": "@vivliostyle/extends-emoji-cat",
   "description": "リプレイス機能テスト",
   "version": "0.0.1",
-  "author": "Vivliostyle <mail@vivliostyle.org>",
+  "author": "Ayumu Takai",
   "files": [
     "*.css",
     "*.js"
@@ -17,9 +17,9 @@
   "license": "CC0-1.0",
   "vivliostyle": {
     "theme": {
-      "name": "サブテーマ3",
+      "name": "猫絵文字置換",
       "style": "./theme.css",
-      "category": "replace",
+      "category": "extends",
       "scripts": "scripts.js",
       "topics": [
         "リプレイス"

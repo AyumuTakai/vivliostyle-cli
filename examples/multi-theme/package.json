@@ -1,7 +1,18 @@
 {
-  "name": "theme-preset",
+  "name": "multi-theme",
   "version": "1.0.0",
+  "scripts": {
+    "build": "yarn install && vs build",
+    "postbuild": "open -a Preview bunko.pdf",
+    "clean": "rimraf bunko.pdf *.wav *.log .vivliostyle",
+    "clean-full": "rimraf node_modules bunko.pdf *.wav *.log .vivliostyle"
+  },
   "dependencies": {
+    "@vivliostyle/extends-chart": "./chart",
+    "@vivliostyle/extends-emoji-cat": "./emojicat",
+    "@vivliostyle/extends-emoji-hand": "./emojihand",
+    "@vivliostyle/extends-openjtalk": "./openJTalk",
+    "@vivliostyle/extends-textlint": "./textlint",
     "@vivliostyle/theme-bunko": "^0.3.0"
   }
 }

@@ -1,21 +1,27 @@
 {
-  "name": "textlint",
-  "version": "1.0.0",
+  "name": "@vivliostyle/extends-textlint",
+  "version": "1.0.1",
   "description": "vivliostyle textlint plugin.",
   "main": "index.js",
   "license": "MIT",
+  "files": [
+    "*.css",
+    "*.js",
+    ".textlintrc"
+  ],
   "dependencies": {
     "textlint": "^11.8.2",
-    "textlint-rule-joyo-kanji": "^0.0.2"
+    "textlint-rule-joyo-kanji": "^0.0.2",
+    "date-utils": "^1.2.21"
   },
   "vivliostyle": {
     "theme": {
       "name": "Textlint plugin",
       "style": "./theme.css",
-      "category": "replace",
+      "category": "extends",
       "scripts": "scripts.js",
       "topics": [
-        "リプレイス","校正","TextLint"
+        "プリプロセス","リプレイス","校正","TextLint"
       ]
     }
   }

@@ -12,36 +12,146 @@ const rootPath = path.resolve(__dirname, '../..');
 const localTmpDir = path.join(rootPath, 'tmp');
 fs.mkdirSync(localTmpDir, { recursive: true });
 
-it('test parse UriTheme', () => {
-  const locator = 'http://example.jp';
+const fileExistsSync = (file: string | undefined) => {
+  if (!file) throw new Error('invalid filepath');
+  try {
+    fs.accessSync(file, fs.constants.R_OK | fs.constants.W_OK);
+    return true;
+  } catch (err) {
+    return false;
+  }
+};
+
+const rmDirRecursive = (path: string) => {
+  if (!fs.existsSync(path)) return;
+  fs.readdirSync(path).forEach((file: string, index: number) => {
+    const curPath = path + '/' + file;
+    if (fs.lstatSync(curPath).isDirectory()) {
+      // recurse
+      rmDirRecursive(curPath);
+    } else {
+      // delete file
+      fs.unlinkSync(curPath);
+    }
+  });
+  fs.rmdirSync(path);
+};
+
+/*
+ *  UriTheme class
+ */
+
+it('test UriTheme', () => {
+  const locator = 'http://example.jp'; //  accept uri begins 'http://' or 'https://'
   const uriTheme = UriTheme.parse(locator);
 
-  expect(uriTheme).toBeDefined();
-  const from = '';
+  expect(uriTheme?.type).toEqual('uri');
+
+  const from = 'anywhere';
   expect(uriTheme?.locateThemePath(from)).toEqual(['http://example.jp']);
+  expect(uriTheme?.location).toEqual('http://example.jp');
+  expect(uriTheme?.name).toEqual('example.jp');
+  // expect(uriTheme?.destination).toBeUndefined(); // UriTheme has no destination property
+  uriTheme?.copyTheme(); // do nothing
+
+  // scripts
+  expect(uriTheme?.scripts).toBeUndefined(); // script file path
+  expect(uriTheme?.preprocess).toBeUndefined();
+  expect(uriTheme?.replaces).toStrictEqual([]); // empty ReplaceRule[]
 });
 
-it('test parse FileTheme', () => {
+it('test UriTheme with invalid locator', () => {
+  const locator = 'not_uri_string';
+  const uriTheme = UriTheme.parse(locator);
+  expect(uriTheme).toBeUndefined();
+});
+
+/*
+ *  FileTheme class
+ */
+
+it('test FileTheme', () => {
   const locator = 'style.css';
-  const contextDir = './src/';
-  const workspaceDir = './dst/';
+  const contextDir = __dirname;
+  const workspaceDir = path.join(localTmpDir, '/fileTheme/dst/');
   const fileTheme = FileTheme.parse(locator, contextDir, workspaceDir);
-  if (fileTheme) {
-    const location = path.relative(process.cwd(), fileTheme.location);
-    const destination = path.relative(process.cwd(), fileTheme.destination);
-    expect(location).toBe('src/style.css');
-    expect(destination).toBe('dst/style.css');
-  }
+
+  expect(fileTheme?.type).toEqual('file');
+
+  const from = process.cwd();
+  expect(fileTheme?.locateThemePath(from)).toEqual([
+    'tmp/fileTheme/dst/style.css',
+  ]); // cwd/tmp/fileTheme/dst/style.css
+  expect(fileTheme?.location).toBe(path.join(__dirname, 'style.css'));
+  expect(fileTheme?.name).toEqual('style.css');
+  expect(fileTheme?.destination).toBe(
+    path.join(localTmpDir, '/fileTheme/dst/style.css'),
+  );
+  expect(fileExistsSync(fileTheme?.destination)).toBeFalsy(); // cwd/tmp/fileTheme/dst/style.css is not exists
+  fileTheme?.copyTheme();
+  expect(fileExistsSync(fileTheme?.destination)).toBeTruthy(); // cwd/tmp/fileTheme/dst/style.css is exists
+
+  // scripts
+  expect(fileTheme?.scripts).toBeUndefined(); // script file path
+  expect(fileTheme?.preprocess).toBeUndefined();
+  expect(fileTheme?.replaces).toStrictEqual([]); // empty ReplaceRule[]
 });
 
-it('test parse PackageTheme', () => {
+it('test FileTheme with invalid locator', () => {
+  const locator = 'invalid/file/path';
+  const fileTheme = FileTheme.parse(locator, '', '');
+  expect(fileTheme).toBeDefined(); // 存在しないパスを指定してもエラーになることはない
+  // TODO: 間違ったファイルパスを指定された場合はどこでエラーになるか調べる。
+  //  parseした時点でファイルが存在しなければエラーにしたほうが良い?
+  //  もしかしたらcssファイルをスクリプトで生成することがあるかも?
+  //  単純にundefinedを返すだけだとThemeManager.parseで問題になりそう。
+});
+
+/*
+ * PackageTheme class
+ */
+
+it('test PackageTheme', () => {
   const locator = '@vivliostyle/theme-bunko';
   const contextDir = './examples/theme-preset';
   const workspaceDir = './tmp';
   const packageTheme = PackageTheme.parse(locator, contextDir, workspaceDir);
+  const from = process.cwd();
 
+  if (
+    fileExistsSync(
+      path.join(localTmpDir, 'themes/packages/@vivliostyle/theme-bunko'),
+    )
+  ) {
+    rmDirRecursive(
+      path.join(localTmpDir, 'themes/packages/@vivliostyle/theme-bunko'),
+    );
+  }
   expect(packageTheme).toBeDefined();
   expect(packageTheme?.style).toEqual(['./theme.css']);
+  expect(packageTheme?.locateThemePath(from)).toEqual([
+    'tmp/themes/packages/@vivliostyle/theme-bunko/theme.css',
+  ]); // cwd/tmp/themes/packages/@vivliostyle/theme-bunko/theme.css
+  expect(packageTheme?.location).toBe(
+    path.join(
+      process.cwd(),
+      'examples/theme-preset/node_modules/@vivliostyle/theme-bunko',
+    ),
+  );
+  expect(packageTheme?.type).toEqual('package');
+  expect(packageTheme?.name).toEqual('@vivliostyle/theme-bunko');
+  expect(packageTheme?.destination).toBe(
+    'tmp/themes/packages/@vivliostyle/theme-bunko',
+  );
+  expect(fileExistsSync(packageTheme?.destination)).toBeFalsy(); // cwd/tmp/themes/packages/@vivliostyle/theme-bunko is not exists
+  packageTheme?.copyTheme();
+  expect(fileExistsSync(packageTheme?.destination)).toBeTruthy(); // cwd/tmp/themes/packages/@vivliostyle/theme-bunko is exists
+  expect(fileExistsSync(path.join(packageTheme!.destination, 'theme.css')));
+
+  // scripts
+  expect(packageTheme?.scripts).toBeUndefined(); // script file path
+  expect(packageTheme?.preprocess).toBeUndefined();
+  expect(packageTheme?.replaces).toStrictEqual([]); // empty ReplaceRule[]
 
   // package has array of style
   const locator2 = './theme_ms';
@@ -52,10 +162,26 @@ it('test parse PackageTheme', () => {
   expect(packageTheme2?.style).toEqual(['theme.css', 'theme2.css']);
 });
 
-it('test ThemeManager', () => {
-  const themeManager = new ThemeManager();
+/*
+ * ThemeManager class
+ */
 
-  expect(themeManager).toBeDefined();
+it('test ThemeManager', () => {
+  const workspaceDir: string = './tmp';
+  const contextDir: string = './examples/theme-preset';
+
+  const themes = ThemeManager.parseThemes(
+    ['http://example.com', 'style.css', '@vivliostyle/theme-bunko'],
+    contextDir,
+    workspaceDir,
+  );
+
+  const uriTheme = themes[0];
+  expect(uriTheme?.type).toBe('uri');
+  const fileTheme = themes[1];
+  expect(fileTheme?.type).toBe('file');
+  const packageTheme = themes[2];
+  expect(packageTheme?.type).toBe('package');
 });
 
 it('test import preprocess scripts', () => {

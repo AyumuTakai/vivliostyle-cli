@@ -63,6 +63,7 @@ export class Theme {
    * traspile scss
    * @param src source file path
    * @param vars overwrite variables
+   * @return css string
    */
   public static transpileSass(src: string, vars: any = null): string {
     // 変数を上書きするために "with ( $name1:value1,$name2:value2, ... )"という文字列を作る
@@ -150,7 +151,8 @@ export class FileTheme extends Theme {
    * @param from
    */
   public locateThemePath(from: string): string[] {
-    return [path.relative(from, this.destination)];
+    const themePath = path.relative(from, this.destination);
+    return [themePath];
   }
 
   /**
@@ -170,7 +172,7 @@ export class FileTheme extends Theme {
   }
 
   /**
-   *
+   * parse locator
    * @param locator
    * @param contextDir
    * @param workspaceDir
@@ -180,19 +182,17 @@ export class FileTheme extends Theme {
     contextDir: string,
     workspaceDir: string,
   ): FileTheme | undefined {
+    const name = path.basename(locator);
     const stylePath = path.resolve(contextDir, locator);
     const sourceRelPath = path.relative(contextDir, stylePath);
-    const theme = new FileTheme(
-      path.basename(locator),
-      stylePath,
-      path.resolve(workspaceDir, sourceRelPath),
-    );
+    const destinationPath = path.resolve(workspaceDir, sourceRelPath);
+    const theme = new FileTheme(name, stylePath, destinationPath);
     return theme;
   }
 }
 
 /**
- *
+ * Package Theme (npm package,local package)
  */
 export class PackageTheme extends Theme {
   type: 'package' = 'package';
@@ -200,7 +200,7 @@ export class PackageTheme extends Theme {
   style: string[];
 
   /**
-   *
+   * Constructor
    * @param name
    * @param location
    * @param destination
@@ -229,7 +229,7 @@ export class PackageTheme extends Theme {
   }
 
   /**
-   *
+   * parse locator
    * @param locator
    * @param contextDir
    * @param workspaceDir
@@ -270,6 +270,9 @@ export class PackageTheme extends Theme {
    */
   public locateThemePath(from: string): string[] {
     return this.style.map((sty) => {
+      if (sty.endsWith('.scss')) {
+        sty = sty.replace(/.scss$/, '.css');
+      }
       return path.relative(from, path.join(this.destination, sty));
     });
   }
@@ -304,7 +307,7 @@ export class PackageTheme extends Theme {
   }
 
   /**
-   * parse theme locator
+   * parse style locator
    * 1. specified in the theme field of the vivliostyle.config.js
    * 2. specified in the style field of the package.json
    * 3. specified in the main field of the package.json
@@ -382,12 +385,13 @@ export class ThemeManager extends Array<ParsedTheme> {
   }
 
   /**
-   *
+   * parse theme(s)
    * @param locators ["theme1","theme2"] | "theme" | undefined
    * @param contextDir
    * @param workspaceDir
+   * @return ParsedTheme[]
    */
-  static parseThemes(
+  public static parseThemes(
     locators: string[] | string | undefined,
     contextDir: string,
     workspaceDir: string,
@@ -412,7 +416,7 @@ export class ThemeManager extends Array<ParsedTheme> {
   }
 
   /**
-   * add theme to themeIndexes
+   * add a theme to themeIndexes
    * @param theme
    */
   private addUsedTheme(theme: ParsedTheme | undefined): void {
@@ -423,7 +427,7 @@ export class ThemeManager extends Array<ParsedTheme> {
   }
 
   /**
-   *
+   * add themes to themeIndexes
    * @param themes
    * @private
    */

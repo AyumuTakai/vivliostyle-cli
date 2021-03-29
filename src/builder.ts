@@ -42,7 +42,7 @@ export function generateManifest(
   },
 ) {
   const entries: PublicationLinks[] = options.entries.map((entry) => ({
-    url: entry.path,
+    url: encodeURI(entry.path),
     title: entry.title,
     ...(entry.encodingFormat && { encodingFormat: entry.encodingFormat }),
     ...(entry.rel && { rel: entry.rel }),
@@ -61,7 +61,7 @@ export function generateManifest(
       if (mimeType) {
         links.push({
           rel: 'cover',
-          url: options.cover,
+          url: encodeURI(options.cover),
           encodingFormat: mimeType,
           width,
           height,

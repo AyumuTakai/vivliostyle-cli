@@ -55,8 +55,8 @@ it('test UriTheme', () => {
   uriTheme?.copyTheme(); // do nothing
 
   // scripts
-  expect(uriTheme?.scripts).toBeUndefined(); // script file path
-  expect(uriTheme?.preprocess).toBeUndefined();
+  expect(uriTheme?.scripts).toStrictEqual([]); // script file path
+  expect(uriTheme?.preprocess).toStrictEqual([]); // empty PreProcess[]
   expect(uriTheme?.replaces).toStrictEqual([]); // empty ReplaceRule[]
 });
 
@@ -92,8 +92,8 @@ it('test FileTheme', () => {
   expect(fileExistsSync(fileTheme?.destination)).toBeTruthy(); // cwd/tmp/fileTheme/dst/style.css is exists
 
   // scripts
-  expect(fileTheme?.scripts).toBeUndefined(); // script file path
-  expect(fileTheme?.preprocess).toBeUndefined();
+  expect(fileTheme?.scripts).toStrictEqual([]); // script file path
+  expect(fileTheme?.preprocess).toStrictEqual([]); // empty PreProcess[]
   expect(fileTheme?.replaces).toStrictEqual([]); // empty ReplaceRule[]
 });
 
@@ -149,8 +149,8 @@ it('test PackageTheme', () => {
   expect(fileExistsSync(path.join(packageTheme!.destination, 'theme.css')));
 
   // scripts
-  expect(packageTheme?.scripts).toBeUndefined(); // script file path
-  expect(packageTheme?.preprocess).toBeUndefined();
+  expect(packageTheme?.scripts).toStrictEqual([]); // script file paths
+  expect(packageTheme?.preprocess).toStrictEqual([]); // empty PreProcess[]
   expect(packageTheme?.replaces).toStrictEqual([]); // empty ReplaceRule[]
 
   // package has array of style
@@ -190,7 +190,7 @@ it('test import preprocess scripts', () => {
   const workspaceDir = './tmp';
   const packageTheme = PackageTheme.parse(locator, contextDir, workspaceDir);
   expect(packageTheme).toBeDefined();
-  expect(packageTheme?.scripts).toBe('scripts.js');
+  expect(packageTheme?.scripts).toStrictEqual(['scripts.js']);
   expect(packageTheme?.preprocess).toBeDefined();
 });
 
@@ -200,7 +200,7 @@ it('test import replace rules', () => {
   const workspaceDir = './tmp';
   const packageTheme = PackageTheme.parse(locator, contextDir, workspaceDir);
   expect(packageTheme).toBeDefined();
-  expect(packageTheme?.scripts).toBe('scripts.js');
+  expect(packageTheme?.scripts).toStrictEqual(['scripts.js']);
   expect(packageTheme?.replaces.length).toBe(1);
 });
 

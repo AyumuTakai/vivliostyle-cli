@@ -23,14 +23,15 @@ export type PreProcess = (
 export class Theme {
   name: string;
   location: string;
-  scripts?: string;
-  preprocess: PreProcess | undefined;
+  scripts: string[];
+  preprocess: PreProcess[];
   replaces: ReplaceRule[];
 
   public constructor(name: string, location: string) {
     this.name = name;
     this.location = location;
-    this.preprocess = undefined;
+    this.scripts = [];
+    this.preprocess = [];
     this.replaces = [];
   }
 
@@ -212,18 +213,20 @@ export class PackageTheme extends Theme {
     location: string,
     destination: string,
     style: string | string[],
-    scripts?: string,
+    scripts?: string | string[],
   ) {
     super(name, location);
     this.destination = destination;
     this.style = Array.isArray(style) ? style : [style];
-    this.scripts = scripts;
-    if (this.scripts) {
-      const scriptsPath = path.resolve(this.location, this.scripts);
+    this.scripts = Array.isArray(scripts) ? scripts : !scripts ? [] : [scripts];
+    for (const filePath of this.scripts) {
+      const scriptsPath = path.resolve(this.location, filePath);
       const script = require(scriptsPath);
       if (script) {
-        this.preprocess = script.preprocess ?? undefined;
-        this.replaces = script.replaces ?? [];
+        this.preprocess = this.preprocess.concat(script.preprocess);
+        if (script.replaces && script.replaces.length > 0) {
+          this.replaces = this.replaces.concat(script.replaces);
+        }
       }
     }
   }

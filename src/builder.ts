@@ -108,8 +108,8 @@ function clearScriptsCache(entries: ParsedEntry[]) {
   for (const entry of entries) {
     if (!entry.theme || entry.theme.length == 0) continue;
     for (const theme of entry.theme) {
-      if (theme.scripts) {
-        const replaceFile = path.join(theme.location, theme.scripts);
+      for (const script of theme.scripts) {
+        const replaceFile = path.join(theme.location, script);
         delete require.cache[replaceFile];
       }
     }

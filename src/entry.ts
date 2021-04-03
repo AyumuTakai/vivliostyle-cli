@@ -37,22 +37,24 @@ export class Entry {
     let replaceRules: ReplaceRule[] = [];
     if (this.theme) {
       for (const theme of this.theme) {
-        replaceRules = theme.replaces.concat(replaceRules);
+        if (replaceRules.length > 0) {
+          replaceRules = theme.replaces.concat(replaceRules);
+        }
       }
     }
     return replaceRules;
   }
 
   public importPreprocess(): PreProcess[] {
-    let preprocess: PreProcess[] = [];
+    let preprocesses: PreProcess[] = [];
     if (this.theme) {
       for (const theme of this.theme) {
-        if (theme.preprocess) {
-          preprocess.unshift(theme.preprocess as PreProcess);
+        for (const preprocess of theme.preprocess) {
+          preprocesses.unshift(preprocess);
         }
       }
     }
-    return preprocess;
+    return preprocesses;
   }
 
   //locateThemePath(path.dirname(entry.target), entry.theme);
@@ -80,7 +82,7 @@ export class ManuscriptEntry extends Entry {
 
   public async getContents(
     filepath: string,
-    preprocess: PreProcess[] | undefined,
+    preprocess: PreProcess[],
   ): Promise<string> {
     let contents = fs.readFileSync(filepath, 'utf8');
     if (contents && preprocess) {

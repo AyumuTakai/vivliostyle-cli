@@ -39,6 +39,7 @@ export function generateTocHtml({
     h(
       'head',
       ...[
+        h('meta', { charset: 'utf-8' }),
         h('title', title ?? ''),
         h('link', {
           href: encodeURI(path.relative(distDir, manifestPath)),
@@ -49,7 +50,7 @@ export function generateTocHtml({
       ].filter((n) => !!n),
     ),
     h(
-      'body',
+      'body#generated-index',
       h('h1', title || ''),
       h('nav#toc', { role: 'doc-toc' }, h('h2', tocTitle), h('ol', items)),
     ),

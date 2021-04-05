@@ -32,6 +32,7 @@ it('generateTocHtml', () => {
   expect(toc).toBe(
     `<html>
   <head>
+    <meta charset="utf-8" />
     <title>Book title</title>
     <link
       href="publication.json"
@@ -39,7 +40,7 @@ it('generateTocHtml', () => {
       type="application/ld+json"
     />
   </head>
-  <body>
+  <body id="generated-index">
     <h1>Book title</h1>
     <nav id="toc" role="doc-toc">
       <h2>Table of Contents</h2>

@@ -122,15 +122,6 @@ export function contextResolve(
   return loc && path.resolve(context, loc);
 }
 
-function normalizeEntry(
-  e: string | EntryObject | ContentsEntryObject,
-): EntryObject | ContentsEntryObject {
-  if (typeof e === 'object') {
-    return e;
-  }
-  return { path: e };
-}
-
 function parsePageSize(size: string): PageSize {
   const [width, height, ...others] = `${size}`.split(',');
   if (others.length) {
@@ -239,79 +230,143 @@ export function collectVivliostyleConfig<T extends CliFlags>(
   };
 }
 
-export async function mergeConfig<T extends CliFlags>(
-  cliFlags: T,
-  config: VivliostyleConfigSchema | undefined,
-  context: string,
-): Promise<MergedConfig> {
-  debug('context directory', context);
-  debug('cliFlags', cliFlags);
-  debug('vivliostyle.config.js', config);
-  let entryContextDir: string;
-  let workspaceDir: string;
+/**
+ *
+ */
+class ConfigComposer {
+  protected cliFlags: CliFlags;
+  protected config: VivliostyleConfigSchema | undefined;
+  protected context: string;
 
-  if (cliFlags.input && isUrlString(cliFlags.input)) {
-    workspaceDir = entryContextDir = cwd;
-  } else {
-    entryContextDir = path.resolve(
-      cliFlags.input
-        ? path.dirname(path.resolve(context, cliFlags.input))
-        : contextResolve(context, config?.entryContext) ?? context,
-    );
-    workspaceDir =
-      contextResolve(context, config?.workspaceDir) ?? entryContextDir;
+  public entryContextDir: string = '';
+  public workspaceDir: string = '';
+  public entries: ParsedEntry[] = [];
+  public input: InputFormat = { format: 'markdown', entry: '' };
+  public exportAliases: { source: string; target: string }[] = [];
+  public themeIndexes: ThemeManager = new ThemeManager();
+
+  public constructor(
+    cliFlags: CliFlags,
+    config: VivliostyleConfigSchema | undefined,
+    context: string,
+  ) {
+    this.cliFlags = cliFlags;
+    this.config = config;
+    this.context = context;
   }
 
-  const includeAssets = config?.includeAssets
-    ? Array.isArray(config.includeAssets)
-      ? config.includeAssets
-      : [config.includeAssets]
-    : DEFAULT_ASSETS;
+  public exportConfig(manifestConfig: ManifestConfig): MergedConfig {
+    const config: MergedConfig = {
+      entryContextDir: this.entryContextDir,
+      workspaceDir: this.workspaceDir,
+      entries: this.entries,
+      input: this.input,
+      outputs: this.outputs(),
+      themeIndexes: this.themeIndexes,
+      includeAssets: this.includeAssets(),
+      exportAliases: this.exportAliases,
+      size: this.size(),
+      customStyle: this.customStyle(),
+      customUserStyle: this.customUserStyle(),
+      singleDoc: this.singleDoc(),
+      quick: this.quick(),
+      pressReady: this.pressReady(),
+      language: this.language(),
+      cover: this.cover(),
+      verbose: this.verbose(),
+      timeout: this.timeout(),
+      sandbox: this.sandbox(),
+      executableChromium: this.executableChromium(),
+      ...manifestConfig,
+    };
+    return config;
+  }
 
-  const language = cliFlags.language ?? config?.language ?? null;
-  const sizeFlag = cliFlags.size ?? config?.size;
-  const size = sizeFlag ? parsePageSize(sizeFlag) : undefined;
-  const customStyle =
-    cliFlags.style &&
-    (isUrlString(cliFlags.style)
-      ? cliFlags.style
-      : pathToFileURL(cliFlags.style).href);
-  const customUserStyle =
-    cliFlags.userStyle &&
-    (isUrlString(cliFlags.userStyle)
-      ? cliFlags.userStyle
-      : pathToFileURL(cliFlags.userStyle).href);
-  const singleDoc = cliFlags.singleDoc ?? false;
-  const quick = cliFlags.quick ?? false;
-  const cover = contextResolve(entryContextDir, config?.cover) ?? undefined;
-  const pressReady = cliFlags.pressReady ?? config?.pressReady ?? false;
+  public includeAssets(): string[] {
+    return this.config?.includeAssets
+      ? Array.isArray(this.config.includeAssets)
+        ? this.config.includeAssets
+        : [this.config.includeAssets]
+      : DEFAULT_ASSETS;
+  }
 
-  const verbose = cliFlags.verbose ?? false;
-  const timeout = cliFlags.timeout ?? config?.timeout ?? DEFAULT_TIMEOUT;
-  const sandbox = cliFlags.sandbox ?? true;
-  const executableChromium =
-    cliFlags.executableChromium ?? puppeteer.executablePath();
+  public language(): string | null {
+    return this.cliFlags.language ?? this.config?.language ?? null;
+  }
 
-  const themeIndexes = new ThemeManager();
-  themeIndexes.setCliTheme(cliFlags, workspaceDir);
-  themeIndexes.setConfigTheme(config, context, workspaceDir);
+  public size(): PageSize | undefined {
+    const sizeFlag = this.cliFlags.size ?? this.config?.size;
+    return sizeFlag ? parsePageSize(sizeFlag) : undefined;
+  }
 
-  const outputs = ((): OutputFormat[] => {
-    if (cliFlags.targets?.length) {
-      return cliFlags.targets.map(({ path: outputPath, format }) => ({
+  public customStyle(): string | undefined {
+    return (
+      this.cliFlags.style &&
+      (isUrlString(this.cliFlags.style)
+        ? this.cliFlags.style
+        : pathToFileURL(this.cliFlags.style).href)
+    );
+  }
+
+  public customUserStyle(): string | undefined {
+    return (
+      this.cliFlags.userStyle &&
+      (isUrlString(this.cliFlags.userStyle)
+        ? this.cliFlags.userStyle
+        : pathToFileURL(this.cliFlags.userStyle).href)
+    );
+  }
+
+  public singleDoc(): boolean {
+    return this.cliFlags.singleDoc ?? false;
+  }
+
+  public quick(): boolean {
+    return this.cliFlags.quick ?? false;
+  }
+
+  public cover(): string | undefined {
+    return (
+      contextResolve(this.entryContextDir!, this.config?.cover) ?? undefined
+    );
+  }
+
+  public pressReady(): boolean {
+    return this.cliFlags.pressReady ?? this.config?.pressReady ?? false;
+  }
+
+  public verbose(): boolean {
+    return this.cliFlags.verbose ?? false;
+  }
+
+  public timeout(): number {
+    return this.cliFlags.timeout ?? this.config?.timeout ?? DEFAULT_TIMEOUT;
+  }
+
+  public sandbox(): boolean {
+    return this.cliFlags.sandbox ?? true;
+  }
+
+  public executableChromium(): string {
+    return this.cliFlags.executableChromium ?? puppeteer.executablePath();
+  }
+
+  public outputs(): OutputFormat[] {
+    if (this.cliFlags.targets?.length) {
+      return this.cliFlags.targets.map(({ path: outputPath, format }) => ({
         path: path.resolve(outputPath),
         format,
       }));
     }
-    if (config?.output) {
-      return (Array.isArray(config.output)
-        ? config.output
-        : [config.output]
+    if (this.config?.output) {
+      return (Array.isArray(this.config.output)
+        ? this.config.output
+        : [this.config.output]
       ).map((target) => {
         if (typeof target === 'string') {
-          return detectOutputFormat(path.resolve(context, target));
+          return detectOutputFormat(path.resolve(this.context, target));
         }
-        const outputPath = path.resolve(context, target.path);
+        const outputPath = path.resolve(this.context, target.path);
         if (!target.format) {
           return { ...target, ...detectOutputFormat(outputPath) };
         }
@@ -326,42 +381,342 @@ export async function mergeConfig<T extends CliFlags>(
       });
     }
     // Outputs a pdf file if any output configuration is not set
-    const filename = config?.title ? `${config.title}.pdf` : 'output.pdf';
+    const filename = this.config?.title
+      ? `${this.config.title}.pdf`
+      : 'output.pdf';
     return [
       {
-        path: path.resolve(context, filename),
+        path: path.resolve(this.context, filename),
         format: 'pdf',
       },
     ];
-  })();
+  }
+}
 
-  const commonOpts: CommonOpts = {
-    entryContextDir,
-    workspaceDir,
-    includeAssets,
-    outputs,
-    themeIndexes,
-    pressReady,
-    size,
-    customStyle,
-    customUserStyle,
-    singleDoc,
-    quick,
-    language,
-    cover,
-    verbose,
-    timeout,
-    sandbox,
-    executableChromium,
-  };
-  if (!cliFlags.input && !config) {
-    throw new Error(
-      'No input is set. Please set an appropriate entry or a Vivliostyle config file.',
+/**
+ *   単一ファイル用設定構築
+ */
+class SingleInputConfigComposer extends ConfigComposer {
+  sourcePath: string;
+  workspaceDir: string;
+  /**
+   * コンストラクタ
+   * @param cliFlags
+   * @param config
+   * @param context
+   */
+  public constructor(
+    cliFlags: CliFlags,
+    config: VivliostyleConfigSchema | undefined,
+    context: string,
+  ) {
+    super(cliFlags, config, context);
+    if (isUrlString(cliFlags.input!)) {
+      this.workspaceDir = this.entryContextDir = cwd;
+      this.sourcePath = this.cliFlags.input!;
+      this.input = { format: 'webbook', entry: this.sourcePath };
+    } else {
+      this.entryContextDir = path.resolve(
+        cliFlags.input
+          ? path.dirname(path.resolve(context, cliFlags.input))
+          : contextResolve(context, config?.entryContext) ?? context,
+      );
+      this.workspaceDir =
+        contextResolve(context, config?.workspaceDir) ?? this.entryContextDir;
+      this.themeIndexes.setCliTheme(this.cliFlags, this.workspaceDir!);
+      this.themeIndexes.setConfigTheme(
+        this.config,
+        this.context,
+        this.workspaceDir!,
+      );
+      this.sourcePath = path.resolve(this.cliFlags.input);
+      this.input = detectInputFormat(this.sourcePath);
+    }
+  }
+
+  /**
+   *
+   */
+  public async compose(): Promise<MergedConfig> {
+    debug('entering single entry config mode');
+    const tmpPrefix = `.vs-${Date.now()}.`;
+
+    // composeSingleInputConfig()のworkspaceDirとmergeConfig()のworkspaceDirは別のパスになることがあるので注意
+    const workspaceDir = path.dirname(this.sourcePath);
+
+    if (this.input.format === 'markdown') {
+      // Single input file; create temporary file
+      const type = detectManuscriptMediaType(this.sourcePath);
+      const metadata = parseFileMetadata(type, this.sourcePath, workspaceDir);
+      const target = path
+        .resolve(workspaceDir, `${tmpPrefix}${path.basename(this.sourcePath)}`)
+        .replace(/\.md$/, '.html');
+      await touchTmpFile(target);
+      const theme = this.themeIndexes.singleInputTheme(metadata);
+      const entry = new ManuscriptEntry(
+        type,
+        metadata.title,
+        theme,
+        this.sourcePath,
+        target,
+        undefined,
+      );
+      this.entries.push(entry);
+      this.exportAliases.push({
+        source: target,
+        target: path.resolve(
+          workspaceDir,
+          path.basename(this.sourcePath).replace(/\.md$/, '.html'),
+        ),
+      });
+    }
+    let manifestConfig: ManifestConfig;
+    if (this.input.format === 'markdown') {
+      // create temporary manifest file
+      const manifestPath = path.resolve(
+        workspaceDir,
+        `${tmpPrefix}${MANIFEST_FILENAME}`,
+      );
+      await touchTmpFile(manifestPath);
+      this.exportAliases.push({
+        source: manifestPath,
+        target: path.resolve(workspaceDir, MANIFEST_FILENAME),
+      });
+      // WebPublicationManifestConfig
+      manifestConfig = {
+        manifestPath,
+        manifestAutoGenerate: {
+          title:
+            this.cliFlags.title ??
+            this.config?.title ??
+            (this.entries.length === 1 && this.entries[0].title
+              ? (this.entries[0].title as string)
+              : path.basename(this.sourcePath)),
+          author: this.cliFlags.author ?? this.config?.author ?? '',
+        },
+      };
+    } else if (
+      this.input.format === 'html' ||
+      this.input.format === 'webbook'
+    ) {
+      // WebbookEntryConfig
+      manifestConfig = { webbookEntryPath: this.input.entry };
+    } else if (this.input.format === 'pub-manifest') {
+      // WebPublicationManifestConfig
+      manifestConfig = {
+        manifestPath: this.input.entry,
+        manifestAutoGenerate: null,
+      };
+    } else if (this.input.format === 'epub-opf') {
+      // EpubManifestConfig
+      manifestConfig = { epubOpfPath: this.input.entry };
+    } else if (this.input.format === 'epub') {
+      // EpubManifestConfig
+      manifestConfig = {
+        epubOpfPath: (await openEpubToTmpDirectory(this.input.entry))
+          .epubOpfPath,
+      };
+    } else {
+      throw new Error('Failed to export manifest declaration');
+    }
+    return this.exportConfig(manifestConfig);
+  }
+}
+
+/**
+ *
+ */
+class ProjectConfigComposer extends ConfigComposer {
+  private autoGeneratedTocPath: string | undefined;
+  private projectTitle: string | undefined;
+  private projectAuthor: string | undefined;
+
+  public constructor(
+    cliFlags: CliFlags,
+    config: VivliostyleConfigSchema | undefined,
+    context: string,
+  ) {
+    super(cliFlags, config, context);
+    if (!config) {
+      throw new Error(
+        'No input is set. Please set an appropriate entry or a Vivliostyle config file.',
+      );
+    }
+    this.entryContextDir = path.resolve(
+      cliFlags.input
+        ? path.dirname(path.resolve(context, cliFlags.input))
+        : contextResolve(context, config?.entryContext) ?? context,
+    );
+    this.workspaceDir =
+      contextResolve(context, config?.workspaceDir) ?? this.entryContextDir;
+  }
+
+  /**
+   *
+   * @param e
+   * @private
+   */
+  private normalizeEntry(
+    e: string | EntryObject | ContentsEntryObject,
+  ): EntryObject | ContentsEntryObject {
+    if (typeof e === 'object') {
+      return e;
+    }
+    return { path: e };
+  }
+
+  /**
+   *
+   * @param entry
+   * @private
+   */
+  private parseEntry(entry: EntryObject | ContentsEntryObject): ParsedEntry {
+    if (!('path' in entry)) {
+      const title = entry.title ?? this.config?.tocTitle ?? TOC_TITLE;
+      const theme = (this.themeIndexes as ThemeManager).tocTheme(
+        entry,
+        this.context,
+        this.workspaceDir!,
+      );
+      const target = this.autoGeneratedTocPath!;
+      return new ContentsEntry(title, theme, target);
+    }
+    const sourcePath = path.resolve(this.entryContextDir, entry.path); // abs
+    const contextEntryPath = path.relative(this.entryContextDir!, sourcePath); // rel
+    const targetPath = path
+      .resolve(this.workspaceDir, contextEntryPath)
+      .replace(/\.md$/, '.html');
+    const type = detectManuscriptMediaType(sourcePath);
+    const metadata = parseFileMetadata(type, sourcePath, this.workspaceDir!);
+
+    const title = entry.title ?? metadata.title ?? this.projectTitle;
+    const theme = (this.themeIndexes as ThemeManager).resolveEntryTheme(
+      metadata,
+      entry,
+      this.context,
+      this.workspaceDir,
+    );
+
+    return new ManuscriptEntry(
+      type,
+      title,
+      theme,
+      sourcePath,
+      targetPath,
+      entry.rel,
     );
   }
-  const parsedConfig = cliFlags.input
-    ? await composeSingleInputConfig(commonOpts, cliFlags, config)
-    : await composeProjectConfig(commonOpts, cliFlags, config, context);
+
+  /**
+   *
+   */
+  public async compose(): Promise<MergedConfig> {
+    debug('entering project config mode');
+    const pkgJsonPath = path.resolve(this.context, 'package.json');
+    const pkgJson = fs.existsSync(pkgJsonPath)
+      ? readJSON(pkgJsonPath)
+      : undefined;
+    if (pkgJson) {
+      debug('located package.json path', pkgJsonPath);
+    }
+
+    this.themeIndexes.setCliTheme(this.cliFlags, this.workspaceDir!);
+    this.themeIndexes.setConfigTheme(
+      this.config,
+      this.context,
+      this.workspaceDir!,
+    );
+
+    this.autoGeneratedTocPath = path.resolve(
+      this.workspaceDir,
+      typeof this.config?.toc === 'string' ? this.config.toc : TOC_FILENAME,
+    );
+    this.projectTitle =
+      this.cliFlags.title ?? this.config?.title ?? pkgJson?.name;
+    this.projectAuthor =
+      this.cliFlags.author ?? this.config?.author ?? pkgJson?.author;
+
+    this.entries = this.config?.entry
+      ? (Array.isArray(this.config.entry)
+          ? this.config.entry
+          : [this.config.entry]
+        )
+          .map(this.normalizeEntry)
+          .map(this.parseEntry, this)
+      : [];
+    if (!this.entries.length) {
+      throw new Error(
+        'The entry fields seems to be empty. Make sure your Vivliostyle configuration.',
+      );
+    }
+
+    let fallbackProjectTitle: string = '';
+
+    if (!this.projectTitle) {
+      if (this.entries.length === 1 && this.entries[0].title) {
+        fallbackProjectTitle = this.entries[0].title;
+      } else {
+        fallbackProjectTitle = path.basename(this.outputs()[0].path);
+        log(
+          `\n${chalk.yellow(
+            'Could not find any appropriate publication title. We set ',
+          )}${chalk.bold.yellow(`"${fallbackProjectTitle}"`)}${chalk.yellow(
+            ' as a fallback.',
+          )}`,
+        );
+      }
+    }
+    if (
+      !!this.config?.toc &&
+      !this.entries.find(({ rel }) => rel === 'contents')
+    ) {
+      const title = this.config?.tocTitle ?? TOC_TITLE;
+      const theme = (this.themeIndexes as ThemeManager).rootTheme();
+      const entry = new ContentsEntry(title, theme, this.autoGeneratedTocPath);
+      this.entries.unshift(entry);
+    }
+
+    this.input = {
+      format: 'pub-manifest',
+      entry: path.join(this.workspaceDir, MANIFEST_FILENAME),
+    };
+    this.exportAliases = [];
+    return this.exportConfig({
+      manifestPath: path.join(this.workspaceDir, MANIFEST_FILENAME),
+      manifestAutoGenerate: {
+        title: this.projectTitle || fallbackProjectTitle,
+        author: this.projectAuthor || '',
+      },
+    });
+  }
+}
+
+/**
+ *
+ * @param cliFlags
+ * @param config
+ * @param context
+ */
+export async function mergeConfig<T extends CliFlags>(
+  cliFlags: T,
+  config: VivliostyleConfigSchema | undefined,
+  context: string,
+): Promise<MergedConfig> {
+  debug('context directory', context);
+  debug('cliFlags', cliFlags);
+  debug('vivliostyle.config.js', config);
+  let parsedConfig: MergedConfig;
+  if (cliFlags.input) {
+    // CLIで1つの入力ファイルが指定された
+    // 入力ファイルの種類によってManifestConfigのいずれかを実装するMergedConfigを返す
+    const composer = new SingleInputConfigComposer(cliFlags, config, context);
+    parsedConfig = await composer.compose();
+  } else {
+    // CLIで入力ファイルが指定されていない
+    // WebPublicationManifestConfigを実装するMergedConfigを返す
+    const composer = new ProjectConfigComposer(cliFlags, config, context);
+    parsedConfig = await composer.compose();
+  }
   debug('parsedConfig', parsedConfig);
   checkUnusedCliFlags(parsedConfig, cliFlags);
   return parsedConfig;
@@ -380,219 +735,11 @@ type CommonOpts = Omit<
   | 'projectAuthor'
 >;
 
-async function composeSingleInputConfig<T extends CliFlags>(
-  otherConfig: CommonOpts,
-  cliFlags: T,
-  config: VivliostyleConfigSchema | undefined,
-): Promise<MergedConfig> {
-  debug('entering single entry config mode');
-
-  let sourcePath: string;
-  let workspaceDir: string;
-  let input: InputFormat;
-  const entries: ParsedEntry[] = [];
-  const exportAliases: { source: string; target: string }[] = [];
-  const tmpPrefix = `.vs-${Date.now()}.`;
-
-  if (cliFlags.input && isUrlString(cliFlags.input)) {
-    sourcePath = cliFlags.input;
-    workspaceDir = otherConfig.workspaceDir;
-    input = { format: 'webbook', entry: sourcePath };
-  } else {
-    sourcePath = path.resolve(cliFlags.input);
-    workspaceDir = path.dirname(sourcePath);
-    input = detectInputFormat(sourcePath);
-  }
-
-  if (input.format === 'markdown') {
-    // Single input file; create temporary file
-    const type = detectManuscriptMediaType(sourcePath);
-    const metadata = parseFileMetadata(type, sourcePath, workspaceDir);
-    const target = path
-      .resolve(workspaceDir, `${tmpPrefix}${path.basename(sourcePath)}`)
-      .replace(/\.md$/, '.html');
-    await touchTmpFile(target);
-    const theme = (otherConfig.themeIndexes as ThemeManager).singleInputTheme(
-      metadata,
-    );
-    const entry = new ManuscriptEntry(
-      type,
-      metadata.title,
-      theme,
-      sourcePath,
-      target,
-      undefined,
-    );
-    entries.push(entry);
-    exportAliases.push({
-      source: target,
-      target: path.resolve(
-        workspaceDir,
-        path.basename(sourcePath).replace(/\.md$/, '.html'),
-      ),
-    });
-  }
-
-  const manifestDeclaration = await (async (): Promise<ManifestConfig> => {
-    if (input.format === 'markdown') {
-      // create temporary manifest file
-      const manifestPath = path.resolve(
-        workspaceDir,
-        `${tmpPrefix}${MANIFEST_FILENAME}`,
-      );
-      await touchTmpFile(manifestPath);
-      exportAliases.push({
-        source: manifestPath,
-        target: path.resolve(workspaceDir, MANIFEST_FILENAME),
-      });
-      return {
-        manifestPath,
-        manifestAutoGenerate: {
-          title:
-            cliFlags.title ??
-            config?.title ??
-            (entries.length === 1 && entries[0].title
-              ? (entries[0].title as string)
-              : path.basename(sourcePath)),
-          author: cliFlags.author ?? config?.author ?? '',
-        },
-      };
-    } else if (input.format === 'html' || input.format === 'webbook') {
-      return { webbookEntryPath: input.entry };
-    } else if (input.format === 'pub-manifest') {
-      return { manifestPath: input.entry, manifestAutoGenerate: null };
-    } else if (input.format === 'epub-opf') {
-      return { epubOpfPath: input.entry };
-    } else if (input.format === 'epub') {
-      const { epubOpfPath } = await openEpubToTmpDirectory(input.entry);
-      return { epubOpfPath };
-    } else {
-      throw new Error('Failed to export manifest declaration');
-    }
-  })();
-
-  return {
-    ...otherConfig,
-    ...manifestDeclaration,
-    entries,
-    input,
-    exportAliases,
-  };
-}
-
-async function composeProjectConfig<T extends CliFlags>(
-  otherConfig: CommonOpts,
-  cliFlags: T,
-  config: VivliostyleConfigSchema | undefined,
-  context: string,
-): Promise<MergedConfig> {
-  debug('entering project config mode');
-
-  const { entryContextDir, workspaceDir, outputs } = otherConfig;
-  const pkgJsonPath = path.resolve(context, 'package.json');
-  const pkgJson = fs.existsSync(pkgJsonPath)
-    ? readJSON(pkgJsonPath)
-    : undefined;
-  if (pkgJson) {
-    debug('located package.json path', pkgJsonPath);
-  }
-
-  const autoGeneratedTocPath = path.resolve(
-    workspaceDir,
-    typeof config?.toc === 'string' ? config.toc : TOC_FILENAME,
-  );
-
-  const projectTitle: string | undefined =
-    cliFlags.title ?? config?.title ?? pkgJson?.name;
-  const projectAuthor: string | undefined =
-    cliFlags.author ?? config?.author ?? pkgJson?.author;
-
-  function parseEntry(entry: EntryObject | ContentsEntryObject): ParsedEntry {
-    if (!('path' in entry)) {
-      const title = entry.title ?? config?.tocTitle ?? TOC_TITLE;
-      const theme = (otherConfig.themeIndexes as ThemeManager).tocTheme(
-        entry,
-        context,
-        workspaceDir,
-      );
-      const target = autoGeneratedTocPath;
-      return new ContentsEntry(title, theme, target);
-    }
-    const sourcePath = path.resolve(entryContextDir, entry.path); // abs
-    const contextEntryPath = path.relative(entryContextDir, sourcePath); // rel
-    const targetPath = path
-      .resolve(workspaceDir, contextEntryPath)
-      .replace(/\.md$/, '.html');
-    const type = detectManuscriptMediaType(sourcePath);
-    const metadata = parseFileMetadata(type, sourcePath, workspaceDir);
-
-    const title = entry.title ?? metadata.title ?? projectTitle;
-    const theme = (otherConfig.themeIndexes as ThemeManager).resolveEntryTheme(
-      metadata,
-      entry,
-      context,
-      workspaceDir,
-    );
-
-    return new ManuscriptEntry(
-      type,
-      title,
-      theme,
-      sourcePath,
-      targetPath,
-      entry.rel,
-    );
-  }
-
-  const entries: ParsedEntry[] = config?.entry
-    ? (Array.isArray(config.entry) ? config.entry : [config.entry])
-        .map(normalizeEntry)
-        .map(parseEntry)
-    : [];
-  if (!entries.length) {
-    throw new Error(
-      'The entry fields seems to be empty. Make sure your Vivliostyle configuration.',
-    );
-  }
-
-  let fallbackProjectTitle: string = '';
-  if (!projectTitle) {
-    if (entries.length === 1 && entries[0].title) {
-      fallbackProjectTitle = entries[0].title;
-    } else {
-      fallbackProjectTitle = path.basename(outputs[0].path);
-      log(
-        `\n${chalk.yellow(
-          'Could not find any appropriate publication title. We set ',
-        )}${chalk.bold.yellow(`"${fallbackProjectTitle}"`)}${chalk.yellow(
-          ' as a fallback.',
-        )}`,
-      );
-    }
-  }
-  if (!!config?.toc && !entries.find(({ rel }) => rel === 'contents')) {
-    const title = config?.tocTitle ?? TOC_TITLE;
-    const theme = (otherConfig.themeIndexes as ThemeManager).rootTheme();
-    const entry = new ContentsEntry(title, theme, autoGeneratedTocPath);
-    entries.unshift(entry);
-  }
-
-  return {
-    ...otherConfig,
-    entries,
-    input: {
-      format: 'pub-manifest',
-      entry: path.join(workspaceDir, MANIFEST_FILENAME),
-    },
-    exportAliases: [],
-    manifestPath: path.join(workspaceDir, MANIFEST_FILENAME),
-    manifestAutoGenerate: {
-      title: projectTitle || fallbackProjectTitle,
-      author: projectAuthor || '',
-    },
-  };
-}
-
+/**
+ *
+ * @param config
+ * @param cliFlags
+ */
 export function checkUnusedCliFlags<T extends CliFlags>(
   config: MergedConfig,
   cliFlags: T,

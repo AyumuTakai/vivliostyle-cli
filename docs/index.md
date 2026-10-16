@@ -15,6 +15,7 @@
 - [Creating Table of Contents Page](./toc-page.md)
 - [Creating Cover Page](./cover-page.md)
 - [Special Output Settings](./special-output-settings.md)
+- [Building a Large Book in Parallel (Experimental)](./parallel-build.md)
 - [Frontend Framework Support](./frontend-framework-support.md)
 
 </li>

@@ -13,6 +13,7 @@
 - [目次の作成](./toc-page.md)
 - [表紙ページの作成](./cover-page.md)
 - [特別な出力設定](./special-output-settings.md)
+- [大きな本の並列ビルド (実験的機能)](./parallel-build.md)
 - [フロントエンドフレームワークのサポート](./frontend-framework-support.md)
 
 </li>

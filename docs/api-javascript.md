@@ -160,6 +160,10 @@ build({
 
 `boolean` = `...`
 
+###### jobs?
+
+`number` = `...`
+
 ###### language?
 
 `string` = `...`
@@ -187,6 +191,10 @@ build({
 ###### output?
 
 `string` \| `object` & `object` \| (`string` \| `object` & `object`)[] = `...`
+
+###### partSpec?
+
+`string` = `...`
 
 ###### port?
 
@@ -412,6 +420,10 @@ Scaffold a new Vivliostyle project.
 
 `boolean` = `...`
 
+###### jobs?
+
+`number` = `...`
+
 ###### language?
 
 `string` = `...`
@@ -439,6 +451,10 @@ Scaffold a new Vivliostyle project.
 ###### output?
 
 `string` \| `object` & `object` \| (`string` \| `object` & `object`)[] = `...`
+
+###### partSpec?
+
+`string` = `...`
 
 ###### port?
 
@@ -795,6 +811,10 @@ Scaffold a new Vivliostyle theme package.
 
 `boolean` = `...`
 
+###### jobs?
+
+`number` = `...`
+
 ###### language?
 
 `string` = `...`
@@ -822,6 +842,10 @@ Scaffold a new Vivliostyle theme package.
 ###### output?
 
 `string` \| `object` & `object` \| (`string` \| `object` & `object`)[] = `...`
+
+###### partSpec?
+
+`string` = `...`
 
 ###### port?
 
@@ -1045,6 +1069,10 @@ Scaffold a new Vivliostyle theme package.
 
 `boolean` = `...`
 
+###### jobs?
+
+`number` = `...`
+
 ###### language?
 
 `string` = `...`
@@ -1072,6 +1100,10 @@ Scaffold a new Vivliostyle theme package.
 ###### output?
 
 `string` \| `object` & `object` \| (`string` \| `object` & `object`)[] = `...`
+
+###### partSpec?
+
+`string` = `...`
 
 ###### port?
 
@@ -1315,6 +1347,10 @@ Open a browser for previewing the publication.
 
 `boolean` = `...`
 
+###### jobs?
+
+`number` = `...`
+
 ###### language?
 
 `string` = `...`
@@ -1342,6 +1378,10 @@ Open a browser for previewing the publication.
 ###### output?
 
 `string` \| `object` & `object` \| (`string` \| `object` & `object`)[] = `...`
+
+###### partSpec?
+
+`string` = `...`
 
 ###### port?
 
@@ -1567,6 +1607,10 @@ Validate a Vivliostyle theme package.
 
 `boolean` = `...`
 
+###### jobs?
+
+`number` = `...`
+
 ###### language?
 
 `string` = `...`
@@ -1594,6 +1638,10 @@ Validate a Vivliostyle theme package.
 ###### output?
 
 `string` \| `object` & `object` \| (`string` \| `object` & `object`)[] = `...`
+
+###### partSpec?
+
+`string` = `...`
 
 ###### port?
 
@@ -1887,6 +1935,7 @@ interface to the schema, so a drift in either direction is rejected.
 | `input.entry` | `string` |
 | `input.format` | `InputFormat` |
 | <a id="property-installdependencies"></a> `installDependencies?` | `boolean` |
+| <a id="property-jobs"></a> `jobs?` | `number` |
 | <a id="property-language-1"></a> `language` | `string` |
 | <a id="property-license"></a> `license?` | `string` |
 | <a id="property-logger"></a> `logger?` | `LoggerInterface` |
@@ -1894,6 +1943,7 @@ interface to the schema, so a drift in either direction is rejected.
 | <a id="property-name"></a> `name?` | `string` |
 | <a id="property-openviewer"></a> `openViewer?` | `boolean` |
 | <a id="property-output"></a> `output?` | `object` & `object` & `object`[] |
+| <a id="property-partspec"></a> `partSpec?` | `string` |
 | <a id="property-port"></a> `port?` | `number` |
 | <a id="property-preflight"></a> `preflight?` | `"press-ready"` \| `"press-ready-local"` |
 | <a id="property-preflightoption"></a> `preflightOption?` | `string`[] |
@@ -1966,6 +2016,7 @@ interface to the schema, so a drift in either direction is rejected.
 | `input.entry` | `string` |
 | `input.format` | `InputFormat` |
 | <a id="property-installdependencies-1"></a> `installDependencies` | `boolean` |
+| <a id="property-jobs-1"></a> `jobs?` | `number` |
 | <a id="property-language-2"></a> `language?` | `string` |
 | <a id="property-license-1"></a> `license` | `string` |
 | <a id="property-logger-1"></a> `logger?` | `LoggerInterface` |
@@ -1973,6 +2024,7 @@ interface to the schema, so a drift in either direction is rejected.
 | <a id="property-name-1"></a> `name` | `string` |
 | <a id="property-openviewer-1"></a> `openViewer?` | `boolean` |
 | <a id="property-output-1"></a> `output?` | `object` & `object` & `object`[] |
+| <a id="property-partspec-1"></a> `partSpec?` | `string` |
 | <a id="property-port-1"></a> `port?` | `number` |
 | <a id="property-preflight-1"></a> `preflight?` | `"press-ready"` \| `"press-ready-local"` |
 | <a id="property-preflightoption-1"></a> `preflightOption?` | `string`[] |

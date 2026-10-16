@@ -31,6 +31,8 @@ export interface PdfMergeSource {
   pdf: Uint8Array;
   /** Number of the leading pages that are left out of the merged document. */
   skipPages?: number;
+  /** Number of the pages of the source to use (default: all). The ones after them (e.g. a blank page that Chromium adds) are left out. */
+  pageCount?: number;
 }
 
 /**
@@ -104,7 +106,7 @@ export async function mergePdfs(
   let producer: string | undefined;
   const linkedNames = new Set<string>();
 
-  for (const { pdf, skipPages = 0 } of sources) {
+  for (const { pdf, skipPages = 0, pageCount: usedPages } of sources) {
     signal?.throwIfAborted();
     using source = disposable(
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- openDocument returns the Document base type; a PDF input yields a PDFDocument
@@ -114,9 +116,11 @@ export async function mergePdfs(
       ) as mupdfType.PDFDocument,
     );
     producer ??= source.getMetaData('info:Producer') || undefined;
-    const pageCount = source.countPages();
+    const pageCount = Math.min(source.countPages(), usedPages ?? Infinity);
     const pageBase = merged.countPages() - skipPages;
-    destinations.push(...readDestinations(source, pageBase, skipPages));
+    destinations.push(
+      ...readDestinations(source, pageBase, skipPages, pageCount),
+    );
     using graftMap = disposable(merged.newGraftMap());
     for (let i = skipPages; i < pageCount; i++) {
       // The graft map makes the pages share the fonts and the images that they share in the source
@@ -166,6 +170,7 @@ function readDestinations(
   source: mupdfType.PDFDocument,
   pageBase: number,
   skipPages: number,
+  pageCount: number,
 ): MergedDestination[] {
   using trailer = disposable(source.getTrailer());
   using catalog = disposable(trailer.get('Root'));
@@ -175,7 +180,7 @@ function readDestinations(
   }
 
   const pageIndexByObject = new Map<number, number>();
-  for (let i = skipPages; i < source.countPages(); i++) {
+  for (let i = skipPages; i < pageCount; i++) {
     using page = disposable(source.findPage(i));
     pageIndexByObject.set(page.asIndirect(), i);
   }

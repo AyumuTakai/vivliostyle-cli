@@ -349,4 +349,29 @@ describe('mergePdfs', () => {
     );
     expect(readDests(merged)['internal-name'].page).toBe(1);
   });
+
+  it('leaves out the pages after pageCount, and their destinations', async () => {
+    const merged = openMerged(
+      await mergePdfs([
+        {
+          pdf: createPdf({
+            label: 'a',
+            pageCount: 3,
+            destinations: [
+              { name: 'kept', page: 1 },
+              { name: 'extra', page: 2 },
+            ],
+          }),
+          pageCount: 2,
+        },
+        { pdf: createPdf({ label: 'b', pageCount: 1 }) },
+      ]),
+    );
+    expect([0, 1, 2].map((i) => pageText(merged, i))).toEqual([
+      'a-0',
+      'a-1',
+      'b-0',
+    ]);
+    expect(Object.keys(readDests(merged))).toEqual(['kept']);
+  });
 });

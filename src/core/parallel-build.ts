@@ -77,6 +77,9 @@ export function planParallelBuild({
   if (!hasConfigFile || inlineConfig.configData) {
     return { reason: 'It needs a config file.' };
   }
+  if (inlineConfig.vite) {
+    return { reason: 'It does not support the inline Vite config.' };
+  }
   if (!isWebPubConfig(config)) {
     return { reason: 'The input is not a list of manuscripts.' };
   }
@@ -217,7 +220,11 @@ export async function buildInParallel(
   options: ParallelBuildOptions & { splitIndexes: number[] },
 ): Promise<string> {
   const { task, config, inlineConfig, jobs, splitIndexes } = options;
-  const signal = inlineConfig.signal;
+  // Aborted when the build fails, to stop the child processes that are running
+  const failure = new AbortController();
+  const signal = inlineConfig.signal
+    ? AbortSignal.any([inlineConfig.signal, failure.signal])
+    : failure.signal;
   const target = config.outputs[0];
   if (target.format !== 'pdf') {
     throw new Error('A PDF output is expected.');
@@ -227,13 +234,16 @@ export async function buildInParallel(
   const partCount = bounds.length - 1;
   const cwd = inlineConfig.cwd ?? process.cwd();
 
-  const workDir = upath.join(config.workspaceDir, '.parallel');
+  // Files of a build are put in a directory of its own, so that builds can run at the same time
+  const rootDir = upath.join(config.workspaceDir, '.parallel');
+  const runId = `${process.pid}-${Date.now()}`;
+  const workDir = upath.join(rootDir, runId);
   fs.mkdirSync(workDir, { recursive: true });
   const temporaryFiles: string[] = [];
   const temporaryFile = (name: string, content: string): string => {
     const file = upath.join(
       config.entryContextDir,
-      `${TEMPORARY_FILE_PREFIX}${name}`,
+      `${TEMPORARY_FILE_PREFIX}${runId}-${name}`,
     );
     fs.writeFileSync(file, content);
     temporaryFiles.push(file);
@@ -246,7 +256,7 @@ export async function buildInParallel(
   const modulesDir = upath.join(config.entryContextDir, 'node_modules');
   const cachePath = fs.existsSync(modulesDir)
     ? upath.join(modulesDir, '.cache/vivliostyle-cli/parallel-build.json')
-    : upath.join(workDir, 'cache.json');
+    : upath.join(rootDir, 'cache.json');
   fs.mkdirSync(upath.dirname(cachePath), { recursive: true });
   const cacheKey = JSON.stringify({
     entries: task.entry.map((entry) => entry.path),
@@ -283,7 +293,6 @@ export async function buildInParallel(
   };
 
   const t0 = Date.now();
-  let succeeded = false;
   let sharedBrowser:
     | Awaited<ReturnType<typeof launchSharedBrowser>>
     | undefined;
@@ -367,6 +376,7 @@ export async function buildInParallel(
         browserWsEndpoint,
       });
       const result = readJson<PartResult>(resultPath);
+      pageCountOf(result, `the part ${index}`);
       results[index] = result;
       const spare = leadingFiles.length;
       const spineIndexes = result.pageInfo?.spineIndexes ?? [];
@@ -384,8 +394,11 @@ export async function buildInParallel(
         return;
       }
       await compile();
-      const pdf = await buildFront();
-      frontPages = await countPages(pdf);
+      await buildFront();
+      frontPages = pageCountOf(
+        readJson<PartResult>(upath.join(workDir, 'front-dummy.result.json')),
+        'the cover and the TOC',
+      );
     };
 
     // ---- the cover and the TOC --------------------------------------------------------------------------------
@@ -440,75 +453,81 @@ export async function buildInParallel(
     };
 
     // ---- build until the page numbers of the parts agree with the pages of the preceding parts ---------------
-    let pending = Array.from({ length: partCount }, (_, i) => i);
-    for (let round = 1; pending.length > 0; round++) {
-      if (round > MAX_ROUNDS) {
-        throw new Error(
-          'The page numbers of the parts did not settle. Try choosing other entries for "parallel.splitBefore".',
-        );
-      }
-      Logger.logInfo(
-        round === 1
-          ? `Building ${partCount} parts in parallel`
-          : `Building ${pending.length} parts again with the right page numbers`,
-      );
-      await Promise.all([
-        pool(
-          pending.map((index) => () => buildPart(index)),
-          jobs,
-        ),
-        round === 1 ? compile().then(dummyFront) : undefined,
-      ]);
-      pending = Array.from({ length: partCount }, (_, i) => i).filter((index) =>
+    const mismatchedParts = () =>
+      Array.from({ length: partCount }, (_, i) => i).filter((index) =>
         Array.from(
           { length: bounds[index + 1] - bounds[index] },
           (_, j) => bounds[index] + j,
         ).some((i) => usedNumber[i] !== startNumber(i)),
       );
-    }
+    const settle = async () => {
+      let pending = mismatchedParts();
+      for (let round = 1; pending.length > 0; round++) {
+        if (round > MAX_ROUNDS) {
+          throw new Error(
+            'The page numbers of the parts did not settle. Try choosing other entries for "parallel.splitBefore".',
+          );
+        }
+        Logger.logInfo(
+          pending.length === partCount && results.every((r) => !r)
+            ? `Building ${partCount} parts in parallel`
+            : `Building ${pending.length} parts again with the right page numbers`,
+        );
+        await Promise.all([
+          pool(
+            pending.map((index) => () => buildPart(index)),
+            jobs,
+          ),
+          // the cover and the TOC with dummy numbers, to know the number of their pages
+          results.every((r) => !r) ? compile().then(dummyFront) : undefined,
+        ]);
+        pending = mismatchedParts();
+      }
+    };
+    await settle();
     Logger.debug(`parallel > parts built in ${Date.now() - t0} ms`);
 
     // ---- the front, with the real numbers ---------------------------------------------------------------------
-    const partResults = results.map((result, index) => {
-      if (!result) {
-        throw new Error(`The part ${index} has not been built.`);
-      }
-      return result;
-    });
-    let frontPdf: string | undefined;
-    let frontResult: PartResult | undefined;
-
     // Where the places that links refer to are in the body (the pages after the cover and the TOC).
     // The viewer puts an element named like the PDF destination on every element that has an id.
     const documentStart: number[] = [];
-    let documentOffset = 0;
-    for (let i = 0; i < entryCount; i++) {
-      documentStart[i] = documentOffset;
-      documentOffset += docPages[i] ?? 0;
-    }
     const positions = new Map<string, { page: number; x: number; y: number }>();
-    partResults.forEach((result, k) => {
-      const spare = skipped[k] > 0 ? 1 : 0;
-      const spineIndexes = result.pageInfo?.spineIndexes ?? [];
-      for (const [spine, ids] of Object.entries(result.pageInfo?.ids ?? {})) {
-        const global = bounds[k] + Number(spine) - spare;
-        const first = spineIndexes.indexOf(Number(spine));
-        for (const [id, [ix, x, y]] of Object.entries(ids)) {
-          if (id.startsWith('viv-id-')) {
-            positions.set(normalizeDestinationName(id), {
-              page: documentStart[global] + ix - first,
-              x,
-              y,
-            });
+    const updatePositions = () => {
+      documentStart.length = 0;
+      positions.clear();
+      let documentOffset = 0;
+      for (let i = 0; i < entryCount; i++) {
+        documentStart[i] = documentOffset;
+        documentOffset += docPages[i] ?? 0;
+      }
+      results.forEach((result, k) => {
+        const spare = skipped[k] > 0 ? 1 : 0;
+        const spineIndexes = result?.pageInfo?.spineIndexes ?? [];
+        for (const [spine, ids] of Object.entries(
+          result?.pageInfo?.ids ?? {},
+        )) {
+          const global = bounds[k] + Number(spine) - spare;
+          const first = spineIndexes.indexOf(Number(spine));
+          for (const [id, [ix, x, y]] of Object.entries(ids)) {
+            if (id.startsWith('viv-id-')) {
+              positions.set(normalizeDestinationName(id), {
+                page: documentStart[global] + ix - first,
+                x,
+                y,
+              });
+            }
           }
         }
-      }
-    });
+      });
+    };
+    updatePositions();
     const basePath = `${config.base.replace(/\/$/v, '')}/`;
     /** Position of a place of the book, or of the document when the place has no element */
     const locate = (name: string) =>
       positions.get(name) ?? positions.get(name.replace(/:0023.*$/v, ''));
 
+    let frontPdf: string | undefined;
+    let frontResult: PartResult | undefined;
     if (hasFront) {
       await compile();
       const contentsEntry = config.entries.find((e) => e.rel === 'contents');
@@ -526,20 +545,35 @@ export async function buildInParallel(
         }
         return String((frontPages ?? 0) + position.page + 1);
       };
-      frontPdf = await buildFront(pageOf);
-      frontResult = readJson<PartResult>(
-        upath.join(workDir, 'front.result.json'),
-      );
-      const actual = await countPages(frontPdf);
-      if (actual !== frontPages) {
-        throw new Error(
-          `The cover and the TOC have ${actual} pages, but ${frontPages} pages were expected. Build again.`,
+      for (let attempt = 1; ; attempt++) {
+        frontPdf = await buildFront(pageOf);
+        frontResult = readJson<PartResult>(
+          upath.join(workDir, 'front.result.json'),
         );
+        const actual = pageCountOf(frontResult, 'the cover and the TOC');
+        if (actual === frontPages) {
+          break;
+        }
+        if (attempt >= MAX_ROUNDS) {
+          throw new Error(
+            'The number of the pages of the cover and the TOC did not settle.',
+          );
+        }
+        // The number of the pages changed from the previous build: the parts need the right numbers
+        frontPages = actual;
+        await settle();
+        updatePositions();
       }
     }
 
     // ---- merge and post-process -------------------------------------------------------------------------------
     Logger.logUpdate('Merging PDFs');
+    const partResults = results.map((result, index) => {
+      if (!result) {
+        throw new Error(`The part ${index} has not been built.`);
+      }
+      return result;
+    });
     const sections: { result: PartResult; skip: number }[] = [
       ...(frontResult ? [{ result: frontResult, skip: 0 }] : []),
       ...partResults.map((result, k) => ({ result, skip: skipped[k] })),
@@ -605,10 +639,18 @@ export async function buildInParallel(
     };
     const merged = await mergePdfs(
       [
-        ...(frontPdf ? [{ pdf: fs.readFileSync(frontPdf) }] : []),
-        ...partResults.map((_, k) => ({
+        ...(frontPdf && frontResult
+          ? [
+              {
+                pdf: fs.readFileSync(frontPdf),
+                pageCount: pageCountOf(frontResult, 'the cover and the TOC'),
+              },
+            ]
+          : []),
+        ...partResults.map((result, k) => ({
           pdf: fs.readFileSync(upath.join(workDir, `part-${k}.pdf`)),
           skipPages: skipped[k],
+          pageCount: pageCountOf(result, `the part ${k}`),
         })),
       ],
       {
@@ -651,21 +693,14 @@ export async function buildInParallel(
         docPages: docPages.map((n) => n ?? 0),
       } satisfies Cache),
     );
-    succeeded = true;
     return target.path;
+  } catch (error) {
+    // Stop the child processes that are still running
+    failure.abort(error);
+    throw error;
   } finally {
     await sharedBrowser?.closeBrowser();
-    if (succeeded) {
-      // Keep the cache only
-      for (const name of fs.readdirSync(workDir)) {
-        if (name !== 'cache.json') {
-          fs.rmSync(upath.join(workDir, name), {
-            recursive: true,
-            force: true,
-          });
-        }
-      }
-    }
+    fs.rmSync(workDir, { recursive: true, force: true });
     for (const file of temporaryFiles) {
       fs.rmSync(file, { force: true });
     }
@@ -677,16 +712,16 @@ function stripLinks(html: string): string {
   return html.replaceAll(/<link[^>]*>/gv, '');
 }
 
-async function countPages(pdf: string): Promise<number> {
-  const { importNodeModule } = await import('../node-modules.js');
-  const mupdf = await importNodeModule('mupdf');
-  const document = mupdf.PDFDocument.openDocument(
-    fs.readFileSync(pdf),
-    'application/pdf',
-  );
-  try {
-    return document.countPages();
-  } finally {
-    document.destroy();
+/** The number of the pages that a child process reported. */
+function pageCountOf(result: PartResult, name: string): number {
+  const spineIndexes = result.pageInfo?.spineIndexes ?? [];
+  if (
+    spineIndexes.length === 0 ||
+    !spineIndexes.every((index) => Number.isInteger(index))
+  ) {
+    throw new Error(
+      `The viewer did not tell the pages of ${name}. The viewer needs to set data-vivliostyle-spine-index on the page containers.`,
+    );
   }
+  return spineIndexes.length;
 }

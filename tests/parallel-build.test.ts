@@ -31,21 +31,23 @@ afterAll(() => {
 });
 
 type PlanOptions = {
+  inlineConfig?: object;
   jobs?: number;
   hasConfigFile?: boolean;
   cliEntry?: string;
 };
 
 async function plan(config: object, options: PlanOptions = {}) {
+  const { inlineConfig, ...rest } = options;
   const task = parseTask(config);
   return planParallelBuild({
     task,
     config: await getTaskConfig([], cwd, config as never),
-    inlineConfig: { cwd },
+    inlineConfig: { cwd, ...inlineConfig },
     hasConfigFile: true,
     jobs: 2,
     cliEntry,
-    ...options,
+    ...rest,
   });
 }
 
@@ -111,6 +113,12 @@ describe('planParallelBuild', () => {
       },
       {},
       'docker',
+    ],
+    [
+      'the Vite config is given inline',
+      { ...book, parallel: { splitBefore: ['b.md'] } },
+      { inlineConfig: { vite: { logLevel: 'silent' } } },
+      'Vite',
     ],
     [
       'the entry of splitBefore does not exist',

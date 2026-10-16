@@ -15,6 +15,7 @@ import upath from 'upath';
 
 import type { ResolvedTaskConfig } from './config/resolve.js';
 import type { BrowserType } from './config/schema.js';
+import { getPartSpec } from './core/parallel-spec.js';
 import { Logger } from './logger.js';
 import { importNodeModule } from './node-modules.js';
 import {
@@ -135,6 +136,28 @@ async function launchBrowser({
   closeBrowser: () => Promise<void>;
 }> {
   const puppeteer = await importNodeModule('puppeteer-core');
+
+  // In a child process of a parallel build, connect to the browser that the parent process has launched
+  // and use a browser context of its own.
+  const sharedEndpoint = getPartSpec()?.browserWsEndpoint;
+  if (sharedEndpoint) {
+    const sharedBrowser = await puppeteer.connect({
+      browserWSEndpoint: sharedEndpoint,
+      protocolTimeout,
+      acceptInsecureCerts: ignoreHttpsErrors,
+    });
+    const sharedContext = await sharedBrowser.createBrowserContext();
+    const closeSharedBrowser = async () => {
+      await sharedContext.close().catch(() => {});
+      await sharedBrowser.disconnect();
+    };
+    registerCleanupHandler('Closing browser', closeSharedBrowser);
+    return {
+      browser: sharedBrowser,
+      browserContext: sharedContext,
+      closeBrowser: closeSharedBrowser,
+    };
+  }
 
   const args: string[] = [];
   // https://github.com/microsoft/playwright/blob/35709546cd4210b7744943ceb22b92c1b126d48d/packages/playwright-core/src/server/chromium/chromium.ts
@@ -396,6 +419,59 @@ async function downloadBrowser({
   return installedBrowser.executablePath;
 }
 
+async function resolveExecutableBrowser(
+  browserConfig: ResolvedTaskConfig['browser'],
+): Promise<string> {
+  let executableBrowser = browserConfig.executablePath;
+  Logger.debug(`Specified browser path: ${executableBrowser}`);
+  if (executableBrowser) {
+    if (!checkBrowserAvailability(executableBrowser)) {
+      throw new Error(
+        `Cannot find the browser. Please check the executable browser path: ${executableBrowser}`,
+      );
+    }
+  } else if (
+    detectBrowserPlatform() === 'linux_arm' &&
+    browserConfig.type === 'chromium'
+  ) {
+    Logger.logInfo(
+      'The official Chromium binaries are not available for ARM64 Linux. Using the system-installed Chromium browser instead.',
+    );
+    executableBrowser = '/usr/bin/chromium';
+  } else {
+    executableBrowser = await getExecutableBrowserPath(browserConfig);
+    Logger.debug(`Using default browser: ${executableBrowser}`);
+    if (!checkBrowserAvailability(executableBrowser)) {
+      // The browser isn't downloaded first time starting CLI so try to download it
+      await cleanupOutdatedBrowsers();
+      await downloadBrowser(browserConfig);
+    }
+  }
+  return executableBrowser;
+}
+
+/**
+ * Launches a browser for the child processes of a parallel build to connect to.
+ */
+export async function launchSharedBrowser(
+  config: Pick<
+    ResolvedTaskConfig,
+    'browser' | 'proxy' | 'sandbox' | 'ignoreHttpsErrors' | 'timeout'
+  >,
+): Promise<{ wsEndpoint: string; closeBrowser: () => Promise<void> }> {
+  const { browser, closeBrowser } = await launchBrowser({
+    browserType: config.browser.type,
+    proxy: config.proxy,
+    executablePath: await resolveExecutableBrowser(config.browser),
+    headless: true,
+    noSandbox: !config.sandbox,
+    disableDevShmUsage: isInContainer(),
+    ignoreHttpsErrors: config.ignoreHttpsErrors,
+    protocolTimeout: config.timeout,
+  });
+  return { wsEndpoint: browser.wsEndpoint(), closeBrowser };
+}
+
 export async function launchPreview({
   mode,
   url,
@@ -424,31 +500,7 @@ export async function launchPreview({
   page: Page;
   closeBrowser: () => Promise<void>;
 }> {
-  let executableBrowser = browserConfig.executablePath;
-  Logger.debug(`Specified browser path: ${executableBrowser}`);
-  if (executableBrowser) {
-    if (!checkBrowserAvailability(executableBrowser)) {
-      throw new Error(
-        `Cannot find the browser. Please check the executable browser path: ${executableBrowser}`,
-      );
-    }
-  } else if (
-    detectBrowserPlatform() === 'linux_arm' &&
-    browserConfig.type === 'chromium'
-  ) {
-    Logger.logInfo(
-      'The official Chromium binaries are not available for ARM64 Linux. Using the system-installed Chromium browser instead.',
-    );
-    executableBrowser = '/usr/bin/chromium';
-  } else {
-    executableBrowser = await getExecutableBrowserPath(browserConfig);
-    Logger.debug(`Using default browser: ${executableBrowser}`);
-    if (!checkBrowserAvailability(executableBrowser)) {
-      // The browser isn't downloaded first time starting CLI so try to download it
-      await cleanupOutdatedBrowsers();
-      await downloadBrowser(browserConfig);
-    }
-  }
+  const executableBrowser = await resolveExecutableBrowser(browserConfig);
 
   signal?.throwIfAborted();
   const { browser, browserContext, closeBrowser } = await launchBrowser({

@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 import terminalLink from 'terminal-link';
@@ -24,25 +25,43 @@ import {
 import { validateThemeCssDependencies } from '../processor/css.js';
 import { createViteServer, generateCmykReserveMap } from '../server.js';
 import { cwd, runCleanupHandlers } from '../util.js';
+import { buildInParallel, planParallelBuild } from './parallel-build.js';
+import { applyPartSpec } from './parallel-part.js';
+import { readPartSpec, setPartSpec } from './parallel-spec.js';
 
 export async function build(
-  inlineConfig: ParsedVivliostyleInlineConfig,
+  givenInlineConfig: ParsedVivliostyleInlineConfig,
   { containerForkMode = false }: { containerForkMode?: boolean } = {},
 ): Promise<void> {
+  // A child process of a parallel build does what the parent process tells (see parallel-spec.ts)
+  const partSpec = givenInlineConfig.partSpec
+    ? readPartSpec(givenInlineConfig.partSpec)
+    : undefined;
+  setPartSpec(partSpec);
+  const inlineConfig: ParsedVivliostyleInlineConfig = partSpec
+    ? { ...givenInlineConfig, ...partSpec.inlineConfig }
+    : givenInlineConfig;
   Logger.setLogOptions({ ...inlineConfig, containerForkMode });
   if (containerForkMode) {
     Logger.setLogPrefix(gray('[Docker]'));
   }
   Logger.debug('build > inlineConfig %O', inlineConfig);
 
-  let vivliostyleConfig =
-    (await loadVivliostyleConfig(inlineConfig)) ??
-    setupConfigFromFlags(inlineConfig);
+  const loadedConfig = await loadVivliostyleConfig(inlineConfig);
+  let vivliostyleConfig = loadedConfig ?? setupConfigFromFlags(inlineConfig);
   warnDeprecatedConfig(vivliostyleConfig, inlineConfig);
   vivliostyleConfig = mergeInlineConfig(vivliostyleConfig, {
     ...inlineConfig,
     quick: false,
   });
+  if (partSpec) {
+    vivliostyleConfig = {
+      ...vivliostyleConfig,
+      tasks: vivliostyleConfig.tasks.map((task) =>
+        applyPartSpec(task, partSpec),
+      ),
+    };
+  }
   const { inlineOptions } = vivliostyleConfig;
   Logger.debug('build > vivliostyleConfig %O', vivliostyleConfig);
 
@@ -51,6 +70,40 @@ export async function build(
 
     let config = resolveTaskConfig(task, inlineOptions);
     Logger.debug('build > config %O', config);
+
+    const logBuilt = (output: string) => {
+      const formattedOutput = cyan(
+        upath.relative(inlineConfig.cwd ?? cwd, output),
+      );
+      Logger.logSuccess(
+        `Finished building ${terminalLink(
+          formattedOutput,
+          pathToFileURL(output).href,
+          {
+            fallback: () => formattedOutput,
+          },
+        )}`,
+      );
+    };
+
+    // Build the book in parts, in parallel processes
+    const jobs = inlineConfig.jobs ?? task.parallel?.jobs;
+    if (jobs && jobs > 1 && !partSpec && !containerForkMode) {
+      const options = {
+        task,
+        config,
+        inlineConfig,
+        hasConfigFile: loadedConfig !== undefined && loadedConfig !== null,
+        jobs,
+      };
+      const plan = planParallelBuild(options);
+      if ('reason' in plan) {
+        Logger.logWarn(`The book is not built in parallel. ${plan.reason}`);
+      } else {
+        logBuilt(await buildInParallel({ ...options, ...plan }));
+        continue;
+      }
+    }
     const viteConfig = await resolveViteConfig({
       ...config,
       mode: 'build',
@@ -99,6 +152,9 @@ export async function build(
         await prepareThemeDirectory(config, inlineConfig.signal);
         await validateThemeCssDependencies(config);
         await compile(config);
+        if (partSpec?.compiledMark) {
+          fs.writeFileSync(partSpec.compiledMark, '');
+        }
         await copyAssets(config);
       }
 
@@ -128,18 +184,7 @@ export async function build(
         output = await buildWebPublication({ target, config });
       }
       if (output && !containerForkMode) {
-        const formattedOutput = cyan(
-          upath.relative(inlineConfig.cwd ?? cwd, output),
-        );
-        Logger.logSuccess(
-          `Finished building ${terminalLink(
-            formattedOutput,
-            pathToFileURL(output).href,
-            {
-              fallback: () => formattedOutput,
-            },
-          )}`,
-        );
+        logBuilt(output);
       }
     }
 

@@ -99,6 +99,17 @@ This option is equivalent with "--preflight press-ready"`,
       `timeout limit for waiting Vivliostyle process [300]`,
       validateTimeoutFlag,
     )
+    .option(
+      '-j, --jobs <number>',
+      `number of builds that run at the same time when the book is built in parts (see "parallel" of the config)`,
+      (value) => Number.parseInt(value, 10),
+    )
+    .addOption(
+      new Option(
+        '--part-spec <path>',
+        'for internal use: instructions of the parent process of a parallel build',
+      ).hideHelp(),
+    )
     .option('-T, --theme <theme...>', 'theme path or package name')
     .option('--title <title>', 'title')
     .option('--author <author>', 'author')

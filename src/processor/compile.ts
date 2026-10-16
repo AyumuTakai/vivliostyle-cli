@@ -19,6 +19,7 @@ import {
 } from '../config/resolve.js';
 import type { ArticleEntryConfig } from '../config/schema.js';
 import { XML_DECLARATION } from '../constants.js';
+import { getPartSpec } from '../core/parallel-spec.js';
 import { Logger } from '../logger.js';
 import { writePublicationManifest } from '../output/webbook.js';
 import {
@@ -225,6 +226,19 @@ export async function transformManuscript(
     isContentsEntry(entry) || isCoverEntry(entry)
       ? entry.template
       : entry.source;
+  // In a parallel build, take the output of a build that has compiled this entry already.
+  const precompiledDirs = getPartSpec()?.precompiledDirs;
+  if (precompiledDirs && isManuscriptEntry(entry)) {
+    const relativeTarget = upath.relative(workspaceDir, entry.target);
+    for (const dir of precompiledDirs) {
+      const precompiled = upath.join(dir, relativeTarget);
+      if (fs.existsSync(precompiled)) {
+        fs.mkdirSync(upath.dirname(entry.target), { recursive: true });
+        fs.copyFileSync(precompiled, entry.target);
+        return;
+      }
+    }
+  }
   let content: JSDOM | undefined;
   let resourceLoader: ResourceLoader | undefined;
   let resourceUrl: string | undefined;

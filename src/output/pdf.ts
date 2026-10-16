@@ -12,6 +12,7 @@ import type {
   PdfOutput,
   ResolvedTaskConfig,
 } from '../config/resolve.js';
+import { getPartSpec } from '../core/parallel-spec.js';
 import type { CmykMap, Meta, Payload, TOCItem } from '../global-viewer.js';
 import { Logger } from '../logger.js';
 import { getViewerFullUrl } from '../server.js';
@@ -261,6 +262,14 @@ export async function buildPDF({
       const toc = await loadTOC(page);
       const pageSizeData = await loadPageSizeData(page);
       const cmykMap = target.cmyk ? await loadCmykMap(page) : {};
+      // In a child process of a parallel build, also read where the elements are
+      let pageInfo: PageInfo | undefined;
+      if (getPartSpec()?.resultPath) {
+        // The pages are laid out only in the print layout
+        await page.emulateMediaType('print');
+        pageInfo = await loadPageInfo(page);
+        await page.emulateMediaType();
+      }
 
       remainTime -= Date.now() - startTime;
       if (remainTime <= 0) {
@@ -305,6 +314,7 @@ export async function buildPDF({
         toc,
         pageSizeData,
         cmykMap,
+        pageInfo,
         pdf,
       };
     },
@@ -313,8 +323,18 @@ export async function buildPDF({
   await closeBrowser();
   signal?.throwIfAborted();
 
-  Logger.logUpdate('Processing PDF');
   fs.mkdirSync(upath.dirname(target.path), { recursive: true });
+
+  // In a child process of a parallel build, the parent process post-processes the PDF merged from the parts
+  const resultPath = getPartSpec()?.resultPath;
+  if (resultPath) {
+    const { pdf, ...result } = browserResult;
+    fs.writeFileSync(target.path, pdf);
+    fs.writeFileSync(resultPath, JSON.stringify(result satisfies PartResult));
+    return target.path;
+  }
+
+  Logger.logUpdate('Processing PDF');
 
   await postProcessPDF({
     pdf: browserResult.pdf,
@@ -397,4 +417,61 @@ function loadPageSizeData(page: Page): Promise<PageSizeData[]> {
 function loadCmykMap(page: Page): Promise<CmykMap> {
   /* v8 ignore next 3 */
   return page.evaluate(() => window.coreViewer.getCmykMap?.() ?? {});
+}
+
+/** Where the pages and the elements of a part of a parallel build are. */
+export interface PageInfo {
+  /** Index of the document (entry) of each page. */
+  spineIndexes: number[];
+  /**
+   * For every document: element id -> [index (in `spineIndexes`) of the first page that has the element,
+   * x and y (pt) of the top left corner of the element in the page].
+   */
+  ids: Record<number, Record<string, [page: number, x: number, y: number]>>;
+}
+
+/** What a child process of a parallel build leaves for the post-processing of the merged PDF. */
+export interface PartResult {
+  browserVersion: string | undefined;
+  pageProgression: 'ltr' | 'rtl';
+  viewerCoreVersion: string | undefined;
+  metadata: Meta;
+  toc: TOCItem[];
+  pageSizeData: PageSizeData[];
+  cmykMap: CmykMap;
+  pageInfo: PageInfo | undefined;
+}
+
+function loadPageInfo(page: Page): Promise<PageInfo> {
+  /* v8 ignore start */
+  return page.evaluate(() => {
+    const info: PageInfo = { spineIndexes: [], ids: {} };
+    const containers = document.querySelectorAll<HTMLElement>(
+      '#vivliostyle-viewer-viewport > div > div > div[data-vivliostyle-page-container]',
+    );
+    containers.forEach((container, index) => {
+      const spineIndex = Number(container.dataset.vivliostyleSpineIndex);
+      info.spineIndexes.push(spineIndex);
+      const ids = (info.ids[spineIndex] ??= {});
+      const pageRect = container.getBoundingClientRect();
+      // The page may be scaled in the viewer
+      const scale =
+        pageRect.width / (Number.parseFloat(container.style.width) || 1) || 1;
+      const toPoint = (px: number) =>
+        Math.round((px / scale) * 0.75 * 100) / 100;
+      for (const element of container.querySelectorAll<HTMLElement>('[id]')) {
+        if (element.id in ids) {
+          continue;
+        }
+        const rect = element.getBoundingClientRect();
+        ids[element.id] = [
+          index,
+          toPoint(rect.left - pageRect.left),
+          toPoint(rect.top - pageRect.top),
+        ];
+      }
+    });
+    return info;
+  });
+  /* v8 ignore stop */
 }

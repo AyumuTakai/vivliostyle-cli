@@ -1027,6 +1027,31 @@ export const BuildTask = v.pipe(
             Directory where intermediate files (e.g., manuscript HTMLs, publication.json) are saved. (default: \`.vivliostyle\`)
           `),
         ),
+        parallel: v.pipe(
+          v.partial(
+            v.object({
+              jobs: v.pipe(
+                v.number(),
+                v.integer(),
+                v.minValue(1),
+                v.description($`
+                  Number of builds that run at the same time. The build is not parallelized if it is 1 or less. The \`--jobs\` option overrides it.
+                `),
+              ),
+              splitBefore: v.pipe(
+                v.array(ValidString),
+                v.description($`
+                  Entries that start a part of the book. Each part is built by a process of its own, and the PDFs are merged. The entries are specified by the \`path\` of the entries.
+                  Choose the entries whose layout does not depend on the preceding pages (e.g. chapter covers on their own named pages).
+                `),
+              ),
+            }),
+          ),
+          v.description($`
+            Options for building the book in parts, in parallel processes (experimental).
+            The PDFs of the parts are merged into one PDF. The tagged structure of the PDF is not kept. See the documentation for details and limitations.
+          `),
+        ),
         /** @deprecated */
         includeAssets: v.pipe(
           v.union([v.array(ValidString), ValidString]),
@@ -1586,6 +1611,19 @@ export const VivliostyleInlineConfigWithoutChecks = v.partial(
           Disable the startup of the preview server during the build process.
         `),
     ),
+    jobs: v.pipe(
+      v.pipe(v.number(), v.integer(), v.minValue(1)),
+      v.description($`
+          Number of builds that run at the same time when the book is built in parts (see \`parallel\` of the config).
+        `),
+    ),
+    partSpec: v.pipe(
+      ValidString,
+      v.metadata({ internal: true }),
+      v.description($`
+          For internal use. Path of a file in which the parent process of a parallel build gives instructions to the child process.
+        `),
+    ),
     projectPath: v.pipe(
       ValidString,
       v.description($`
@@ -1736,6 +1774,8 @@ export type InlineOptions = Pick<
   | 'preflightOption'
   | 'cmyk'
   | 'disableServerStartup'
+  | 'jobs'
+  | 'partSpec'
   | 'projectPath'
   | 'template'
   | 'createConfigFileOnly'

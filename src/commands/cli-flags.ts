@@ -30,6 +30,8 @@ export interface CliFlags {
   language?: string;
   readingProgression?: 'ltr' | 'rtl';
   timeout?: number;
+  jobs?: number;
+  partSpec?: string;
   renderMode?: 'local' | 'docker';
   preflight?: 'press-ready' | 'press-ready-local';
   preflightOption?: string[];

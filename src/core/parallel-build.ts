@@ -188,6 +188,7 @@ function runChild({
     '--part-spec',
     specPath,
   ];
+  const started = Date.now();
   return new Promise((resolve, reject) => {
     signal?.throwIfAborted();
     const child = spawn(process.execPath, args, {
@@ -205,6 +206,9 @@ function runChild({
     });
     child.on('error', reject);
     child.on('close', (code) => {
+      Logger.debug(
+        `parallel > ${upath.basename(specPath, '.json')} took ${Date.now() - started} ms`,
+      );
       if (code === 0) {
         resolve();
       } else {

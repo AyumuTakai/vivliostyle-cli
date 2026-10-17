@@ -146,6 +146,20 @@ describe('layout cache', () => {
     );
   });
 
+  it('has a key that does not depend on the workspace', async () => {
+    const one = await getTaskConfig([], cwd, {
+      entry: ['a.md', 'b.md'],
+      output: 'book.pdf',
+    } as never);
+    const another = await getTaskConfig([], cwd, {
+      entry: ['a.md', 'b.md'],
+      output: 'book.pdf',
+      workspaceDir: '.another-workspace',
+    } as never);
+    expect(layoutCacheKey(another)).toBe(layoutCacheKey(one));
+    expect(JSON.parse(layoutCacheKey(one)).entries).toEqual(['a.md', 'b.md']);
+  });
+
   it('has a key that changes with the entries', async () => {
     const one = await getTaskConfig([], cwd, {
       entry: ['a.md', 'b.md'],

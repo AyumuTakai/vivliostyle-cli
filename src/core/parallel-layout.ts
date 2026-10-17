@@ -43,8 +43,12 @@ export function manuscriptEntries(config: ResolvedTaskConfig): ParsedEntry[] {
 
 export function layoutCacheKey(config: ResolvedTaskConfig): string {
   return JSON.stringify({
+    // The sources, not the compiled files: the latter are in the workspace, which can be anywhere
     entries: manuscriptEntries(config).map((entry) =>
-      upath.relative(config.entryContextDir, entry.target),
+      entry.source?.type === 'file'
+        ? upath.relative(config.entryContextDir, entry.source.pathname)
+        : (entry.source?.href ??
+          upath.relative(config.workspaceDir, entry.target)),
     ),
     front: config.entries.some((entry) => !isManuscript(entry)),
   });

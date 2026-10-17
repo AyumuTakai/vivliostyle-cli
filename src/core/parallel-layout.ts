@@ -27,6 +27,8 @@ export interface LayoutCache {
   frontPages?: number;
   /** Number of the pages of each entry */
   docPages?: number[];
+  /** The page number written for each link of the TOC in the previous build (to build the cover and the TOC without waiting for the parts) */
+  tocNumbers?: Record<string, string>;
   /** Whether each entry starts with a named page, so that the layout of the entry does not depend on the preceding pages */
   named?: boolean[];
 }

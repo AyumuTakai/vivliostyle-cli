@@ -516,6 +516,17 @@ export async function buildInParallel(
         pending = heavyFirst(mismatchedParts());
       }
     };
+    // If the previous build left the page numbers of the links of the TOC, the cover and the TOC are built while
+    // the parts are built, and they are used if the numbers turn out to be the same
+    let speculativeFront: Promise<Record<string, string> | null> | undefined;
+    if (hasFront && cache?.tocNumbers && cache.frontPages !== undefined) {
+      const numbers = cache.tocNumbers;
+      speculativeFront = compile()
+        .then(() => buildFront((href) => numbers[href] ?? ''))
+        .then(() => numbers)
+        // If it failed, the cover and the TOC are built again (and the error is reported then)
+        .catch(() => null);
+    }
     await settle();
     Logger.debug(`parallel > parts built in ${Date.now() - t0} ms`);
 
@@ -560,6 +571,7 @@ export async function buildInParallel(
 
     let frontPdf: string | undefined;
     let frontResult: PartResult | undefined;
+    let tocNumbers: Record<string, string> | undefined;
     if (hasFront) {
       await compile();
       const contentsEntry = config.entries.find((e) => e.rel === 'contents');
@@ -577,25 +589,49 @@ export async function buildInParallel(
         }
         return String((frontPages ?? 0) + position.page + 1);
       };
-      for (let attempt = 1; ; attempt++) {
+      const hrefs = contentsEntry
+        ? tocHrefsOf(fs.readFileSync(compiledTarget(contentsEntry), 'utf8'))
+        : [];
+      let frontReady = false;
+      const speculativeNumbers = await speculativeFront;
+      if (
+        speculativeNumbers &&
+        hrefs.every((href) => pageOf(href) === speculativeNumbers[href])
+      ) {
+        const result = readJson<PartResult>(
+          upath.join(workDir, 'front.result.json'),
+        );
+        if (pageCountOf(result, 'the cover and the TOC') === frontPages) {
+          frontPdf = upath.join(workDir, 'front.pdf');
+          frontResult = result;
+          frontReady = true;
+          Logger.debug(
+            'parallel > the cover and the TOC built in advance are used',
+          );
+        }
+      }
+      for (let attempt = 1; !frontReady; attempt++) {
         frontPdf = await buildFront(pageOf);
         frontResult = readJson<PartResult>(
           upath.join(workDir, 'front.result.json'),
         );
         const actual = pageCountOf(frontResult, 'the cover and the TOC');
-        if (actual === frontPages) {
-          break;
-        }
-        if (attempt >= MAX_ROUNDS) {
+        frontReady = actual === frontPages;
+        if (!frontReady && attempt >= MAX_ROUNDS) {
           throw new Error(
             'The number of the pages of the cover and the TOC did not settle.',
           );
         }
-        // The number of the pages changed from the previous build: the parts need the right numbers
-        frontPages = actual;
-        await settle();
-        updatePositions();
+        if (!frontReady) {
+          // The number of the pages changed from the previous build: the parts need the right numbers
+          frontPages = actual;
+          await settle();
+          updatePositions();
+        }
       }
+      tocNumbers = Object.fromEntries(
+        hrefs.map((href) => [href, pageOf(href)]),
+      );
     }
 
     // ---- merge and post-process -------------------------------------------------------------------------------
@@ -721,6 +757,7 @@ export async function buildInParallel(
       key: cacheKey,
       frontPages: frontPages ?? 0,
       docPages: docPages.map((n) => n ?? 0),
+      ...(tocNumbers ? { tocNumbers } : {}),
     });
     return target.path;
   } catch (error) {
@@ -734,6 +771,15 @@ export async function buildInParallel(
       fs.rmSync(file, { force: true });
     }
   }
+}
+
+/** The targets of the links of the TOC document. */
+export function tocHrefsOf(html: string): string[] {
+  return [
+    ...new Set(
+      [...html.matchAll(/<a href="([^"]*)"/gv)].map((match) => match[1]),
+    ),
+  ];
 }
 
 /** Removes the links, which refer to files of the workspace that the build of the cover and the TOC does not have. */

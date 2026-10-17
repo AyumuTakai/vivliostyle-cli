@@ -6,7 +6,7 @@ import * as v from 'valibot';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { VivliostyleConfigSchema } from '../src/config/schema.js';
-import { planParallelBuild } from '../src/core/parallel-build.js';
+import { planParallelBuild, tocHrefsOf } from '../src/core/parallel-build.js';
 import {
   layoutCacheKey,
   layoutCachePath,
@@ -351,6 +351,20 @@ describe('orderPartsHeavyFirst', () => {
     expect(orderPartsHeavyFirst([2, 1], bounds, [9, 9, 1, 2, 2, 2])).toEqual([
       2, 1,
     ]);
+  });
+});
+
+describe('tocHrefsOf', () => {
+  it('lists the targets of the links once each, in the order of the document', () => {
+    expect(
+      tocHrefsOf(
+        '<nav><ol><li><a href="a.html">A</a><ol><li><a href="a.html#x">X</a></li></ol></li><li><a href="b.html">B</a></li><li><a href="a.html#x">X again</a></li></ol></nav>',
+      ),
+    ).toEqual(['a.html', 'a.html#x', 'b.html']);
+  });
+
+  it('gives nothing for a document without links', () => {
+    expect(tocHrefsOf('<p>text</p>')).toEqual([]);
   });
 });
 

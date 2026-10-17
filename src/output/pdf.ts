@@ -234,7 +234,9 @@ export async function buildPDF({
       let remainTime = config.timeout;
       const startTime = Date.now();
 
-      await page.waitForNetworkIdle({ signal });
+      // The viewer is LOADING until it has typeset the book, so there is no need to wait for a quiet network
+      // for long: waiting for the state below is enough.
+      await page.waitForNetworkIdle({ idleTime: 0, signal });
       await page.waitForFunction(() => !!window.coreViewer, { signal });
 
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- read the undocumented `protocol` field puppeteer-core sets on the browser
@@ -244,7 +246,7 @@ export async function buildPDF({
       await page.waitForFunction(
         /* v8 ignore next */
         () => window.coreViewer.readyState === 'complete',
-        { polling: 1000, signal },
+        { polling: 50, signal },
       );
       // Ignore progress dispatched after this point
       typesettingFinished = true;

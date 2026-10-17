@@ -121,11 +121,13 @@ describe('layout cache', () => {
 
     writeLayoutCache(path, { key, docPages: [1, 2], named: [true, false] });
     writeLayoutCache(path, { key, frontPages: 5, docPages: [3, 4] });
+    writeLayoutCache(path, { key, tocNumbers: { 'a.html': '6' } });
     expect(readLayoutCache(path, key)).toEqual({
       key,
       frontPages: 5,
       docPages: [3, 4],
       named: [true, false],
+      tocNumbers: { 'a.html': '6' },
     });
     expect(readLayoutCache(path, 'another book')).toBeUndefined();
   });

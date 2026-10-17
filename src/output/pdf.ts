@@ -18,6 +18,11 @@ import {
   learnLayout,
 } from '../core/parallel-layout.js';
 import { getPartSpec } from '../core/parallel-spec.js';
+import {
+  fingerprintPdf,
+  sourcesHash,
+  writeReference,
+} from '../core/parallel-verify.js';
 import type { CmykMap, Meta, Payload, TOCItem } from '../global-viewer.js';
 import { Logger } from '../logger.js';
 import { getViewerFullUrl } from '../server.js';
@@ -318,12 +323,16 @@ export async function buildPDF({
 
       if (learn) {
         try {
-          await learnLayout({
-            page,
-            config,
-            cachePath: layoutCachePath(config),
-            key: layoutCacheKey(config),
-          });
+          const cachePath = layoutCachePath(config);
+          const key = layoutCacheKey(config);
+          if (await learnLayout({ page, config, cachePath, key })) {
+            // This PDF is what a book split in parts is compared with
+            writeReference(cachePath, {
+              key,
+              hash: sourcesHash(config),
+              pages: await fingerprintPdf(pdf),
+            });
+          }
         } catch (error) {
           // It only helps the next build
           Logger.debug('Failed to examine the layout of the book', error);

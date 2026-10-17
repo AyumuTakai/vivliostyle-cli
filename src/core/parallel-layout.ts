@@ -29,6 +29,10 @@ export interface LayoutCache {
   docPages?: number[];
   /** The page number written for each link of the TOC in the previous build (to build the cover and the TOC without waiting for the parts) */
   tocNumbers?: Record<string, string>;
+  /** The entries that the book was split before and the result was the same as the book built as a whole */
+  verified?: number[];
+  /** The entries that the book was split before and the result was different, for the contents of the hash */
+  unsafe?: { hash: string; entries: number[] };
   /** Whether each entry starts with a named page, so that the layout of the entry does not depend on the preceding pages */
   named?: boolean[];
 }
@@ -85,53 +89,43 @@ export function writeLayoutCache(path: string, update: LayoutCache): void {
   fs.writeFileSync(path, JSON.stringify({ ...previous, ...update }));
 }
 
+/** The number of the pages that a part costs in addition to its pages (the fixed cost of a part and the slowing down of the others). */
+const PART_COST = 10;
+const MAX_PARTS = 5;
+
+interface Partition {
+  cuts: number[];
+  biggest: number;
+}
+
 /**
- * Chooses the entries to split the book before, so that the parts have similar numbers of pages.
- * The book is split only before the entries that start with a named page.
- * Returns nothing if the book should not be split.
+ * Splits the entries into parts, only before the given entries, so that the biggest part, and the number of
+ * the parts, are small.
  */
-export function chooseSplitIndexes({
-  docPages,
-  named,
-  jobs,
-  minPages = AUTO_MIN_PAGES,
-}: {
-  docPages: readonly number[];
-  named: readonly boolean[];
-  jobs: number;
-  minPages?: number;
-}): number[] | undefined {
-  const total = docPages.reduce((sum, pages) => sum + pages, 0);
-  if (docPages.length !== named.length || total < minPages) {
-    return undefined;
-  }
-  const candidates = named
-    .map((isNamed, index) => (isNamed && index > 0 ? index : -1))
-    .filter((index) => index > 0);
-  const parts = Math.min(jobs, candidates.length + 1);
-  if (parts < 2) {
-    return undefined;
-  }
+function bestPartition(
+  docPages: readonly number[],
+  candidates: readonly number[],
+  maxParts: number,
+): Partition | undefined {
   const prefix = [0];
   for (const pages of docPages) {
     prefix.push((prefix.at(-1) ?? 0) + pages);
   }
   const pagesBetween = (from: number, to: number) => prefix[to] - prefix[from];
   const points = [0, ...candidates];
-  // best[k][j]: the number of the pages of the biggest part, at the best, when the first `k` parts end just before points[j]
   const count = points.length;
   const INF = Number.POSITIVE_INFINITY;
-  const best: number[][] = Array.from({ length: parts + 1 }, () =>
+  // best[k][j]: the number of the pages of the biggest part, at the best, when the first `k` parts end just before points[j]
+  const best: number[][] = Array.from({ length: maxParts + 1 }, () =>
     Array.from({ length: count }, () => INF),
   );
-  const from: number[][] = Array.from({ length: parts + 1 }, () =>
+  const from: number[][] = Array.from({ length: maxParts + 1 }, () =>
     Array.from({ length: count }, () => -1),
   );
-  // one part: from the start of the book to just before points[j]
   for (let j = 1; j < count; j++) {
     best[1][j] = pagesBetween(0, points[j]);
   }
-  for (let k = 2; k < parts; k++) {
+  for (let k = 2; k < maxParts; k++) {
     for (let j = k; j < count; j++) {
       for (let i = k - 1; i < j; i++) {
         const value = Math.max(
@@ -145,30 +139,134 @@ export function chooseSplitIndexes({
       }
     }
   }
-  // the last part ends at the end of the book
-  let bestValue = INF;
-  let last = -1;
-  for (let j = parts - 1; j < count; j++) {
-    const value = Math.max(
-      best[parts - 1][j],
-      pagesBetween(points[j], docPages.length),
-    );
-    if (value < bestValue) {
-      bestValue = value;
-      last = j;
+  let result: (Partition & { cost: number }) | undefined;
+  for (let parts = 2; parts <= Math.min(maxParts, count); parts++) {
+    let biggest = INF;
+    let last = -1;
+    for (let j = parts - 1; j < count; j++) {
+      const value = Math.max(
+        best[parts - 1][j],
+        pagesBetween(points[j], docPages.length),
+      );
+      if (value < biggest) {
+        biggest = value;
+        last = j;
+      }
+    }
+    const cost = biggest + PART_COST * parts;
+    if (last >= 0 && (!result || cost < result.cost)) {
+      const cuts: number[] = [];
+      let j = last;
+      for (let k = parts - 1; k >= 1; k--) {
+        cuts.unshift(points[j]);
+        j = from[k][j] >= 0 ? from[k][j] : j - 1;
+      }
+      result = { cuts, biggest, cost };
+    }
+  }
+  return result;
+}
+
+/**
+ * Chooses the entries to split the book before, so that the parts have similar numbers of pages.
+ * The book is split before the entries that start with a named page, and the entries that were found to be
+ * safe. When the biggest part is still big, other entries are used too (`unverified`), if `allowUnknown`; it
+ * has to be checked that the book built so is the same as the book built as a whole.
+ * Returns nothing if the book should not be split.
+ */
+export function chooseSplitIndexes({
+  docPages,
+  named,
+  verified = [],
+  unsafe = [],
+  jobs,
+  allowUnknown = true,
+  minPages = AUTO_MIN_PAGES,
+}: {
+  docPages: readonly number[];
+  named: readonly boolean[];
+  verified?: readonly number[];
+  unsafe?: readonly number[];
+  jobs: number;
+  allowUnknown?: boolean;
+  minPages?: number;
+}): { splitIndexes: number[]; unverified: number[] } | undefined {
+  const total = docPages.reduce((sum, pages) => sum + pages, 0);
+  if (docPages.length !== named.length || total < minPages) {
+    return undefined;
+  }
+  const maxParts = Math.min(jobs, MAX_PARTS);
+  const excluded = new Set(unsafe);
+  const known = new Set(verified);
+  const trusted = named
+    .map((isNamed, index) =>
+      (isNamed || known.has(index)) && index > 0 && !excluded.has(index)
+        ? index
+        : -1,
+    )
+    .filter((index) => index > 0);
+  const withTrusted = bestPartition(docPages, trusted, maxParts);
+  // The biggest part is not big enough to try other entries
+  if (withTrusted && withTrusted.biggest <= total * 0.45) {
+    return { splitIndexes: withTrusted.cuts, unverified: [] };
+  }
+  if (allowUnknown) {
+    const anywhere = docPages
+      .map((_, index) => index)
+      .filter((index) => index > 0 && !excluded.has(index));
+    const withAny = bestPartition(docPages, anywhere, maxParts);
+    if (
+      withAny &&
+      withAny.biggest <= total * 0.8 &&
+      (!withTrusted || withAny.biggest < withTrusted.biggest * 0.85)
+    ) {
+      const trustedSet = new Set(trusted);
+      return {
+        splitIndexes: withAny.cuts,
+        unverified: withAny.cuts.filter((index) => !trustedSet.has(index)),
+      };
     }
   }
   // not worth it when the biggest part is nearly as big as the book
-  if (last < 0 || bestValue > total * 0.8) {
-    return undefined;
+  return withTrusted && withTrusted.biggest <= total * 0.8
+    ? { splitIndexes: withTrusted.cuts, unverified: [] }
+    : undefined;
+}
+
+/** Remembers that the book split before the entries is the same as the book built as a whole, or is not. */
+export function recordSplitResult(
+  path: string,
+  key: string,
+  result:
+    | { verified: readonly number[] }
+    | { unsafe: readonly number[]; hash: string },
+): void {
+  const previous = readLayoutCache(path, key);
+  if (!previous) {
+    return;
   }
-  const result: number[] = [];
-  let j = last;
-  for (let k = parts - 1; k >= 1; k--) {
-    result.unshift(points[j]);
-    j = from[k][j] >= 0 ? from[k][j] : j - 1;
+  if ('verified' in result) {
+    writeLayoutCache(path, {
+      ...previous,
+      verified: [
+        ...new Set([...(previous.verified ?? []), ...result.verified]),
+      ],
+    });
+  } else {
+    const sameContents = previous.unsafe?.hash === result.hash;
+    writeLayoutCache(path, {
+      ...previous,
+      unsafe: {
+        hash: result.hash,
+        entries: [
+          ...new Set([
+            ...(sameContents ? (previous.unsafe?.entries ?? []) : []),
+            ...result.unsafe,
+          ]),
+        ],
+      },
+    });
   }
-  return result;
 }
 
 /**
@@ -185,7 +283,7 @@ export async function learnLayout({
   config: ResolvedTaskConfig;
   cachePath: string;
   key: string;
-}): Promise<void> {
+}): Promise<boolean> {
   const spineIndexes = await page.evaluate(() =>
     [
       ...document.querySelectorAll<HTMLElement>(
@@ -198,7 +296,7 @@ export async function learnLayout({
     total < AUTO_MIN_PAGES ||
     !spineIndexes.every((i) => Number.isInteger(i))
   ) {
-    return;
+    return false;
   }
   const pagesOf = config.entries.map(
     (_, index) => spineIndexes.filter((spine) => spine === index).length,
@@ -244,6 +342,7 @@ export async function learnLayout({
     docPages: manuscripts.map(({ index }) => pagesOf[index]),
     ...(named.length === manuscripts.length ? { named } : {}),
   });
+  return true;
 }
 
 /**

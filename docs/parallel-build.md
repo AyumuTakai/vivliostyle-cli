@@ -11,6 +11,8 @@ You do not need any setting. `vivliostyle build` works as follows:
 1. The first build of a book is a normal build. It also examines the book: the number of the pages of each entry, and whether each entry starts with a named page (the `page` property of CSS, such as a chapter cover). The result is saved in `node_modules/.cache/vivliostyle-cli/` of the project (in the workspace directory if the project has no `node_modules`). A book of less than 150 pages is not examined.
 2. From the next build, a book of 150 pages or more that has entries starting with a named page is split before such entries, into parts that have similar numbers of pages, and the parts are built in parallel.
 
+A book with a very long chapter cannot be split well only before named pages. In that case, the book is also split before other entries, in the long chapter. The result is checked: the text of each page and the positions of its lines are compared with the PDF of the build that examined the book (positions that differ by 0.5 pt or less are the same). If they are the same, the entries are remembered as safe to split before, and the check is not made again. If not, they are never used again for the book, and the book is built again without them (this build takes longer, once).
+
 If the book is edited and the number of its pages changes, the parts are typeset again with the right page numbers (see [How it works](#how-it-works)), and the new numbers are saved.
 
 To turn it off, set `parallel: false` in the config file, or use `--jobs 1`.
@@ -79,6 +81,8 @@ Split the book into parts of similar numbers of pages. The build time is about t
 - The command is run with the installed `vivliostyle` command (the child processes run `dist/cli.js` of the package).
 
 ## Limitations
+
+- The check of the entries that are not known to be safe compares the text and the positions of the lines, but not images and drawings. Remember that the entries once found to be safe are not checked again even if the style of the book is changed later; remove `node_modules/.cache/vivliostyle-cli` (or use `parallel.splitBefore`, which is not checked either) if you change the style so that the layout depends on the preceding pages.
 
 - The tagged structure of the PDF (used for accessibility) is not kept in the merged PDF.
 - References to page numbers (`target-counter(..., page)`) work only within a part, except for the table of contents.

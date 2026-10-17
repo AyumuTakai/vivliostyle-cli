@@ -39,6 +39,7 @@ import type { PartResult } from '../output/pdf.js';
 import { cliRoot } from '../util.js';
 import {
   chooseSplitIndexes,
+  recordSplitResult,
   layoutCacheKey,
   layoutCachePath,
   readLayoutCache,
@@ -51,6 +52,14 @@ import {
 } from './parallel-part.js';
 import type { PartSpec } from './parallel-spec.js';
 import { destinationNameOf, readTocItems } from './parallel-toc.js';
+import {
+  firstDifferentPage,
+  fingerprintPdf,
+  readReference,
+  sourcesHash,
+  UnsafeSplitError,
+  writeReference,
+} from './parallel-verify.js';
 
 const MAX_ROUNDS = 3;
 const cliEntryPath = upath.join(cliRoot, 'dist/cli.js');
@@ -65,12 +74,20 @@ export interface ParallelBuildOptions {
   jobs: number;
   /** The user asked for the parallel build (it is not the default). */
   explicit?: boolean;
+  /** Split before entries that are not known to be safe, and check the result (default: yes). */
+  allowUnknown?: boolean;
   /** The CLI that child processes run (default: the one of this package). */
   cliEntry?: string;
 }
 
 export type ParallelPlan =
-  | { splitIndexes: number[] }
+  | {
+      splitIndexes: number[];
+      /** The entries to split before whose safety is not known: the result has to be checked. */
+      unverified?: number[];
+      /** What the book contains now (see `sourcesHash`), if it has to be known later. */
+      hash?: string;
+    }
   | {
       reason: string;
       /** Not worth telling the user (the user did not ask for the parallel build). */
@@ -92,6 +109,7 @@ export function planParallelBuild({
   hasConfigFile,
   jobs,
   explicit = true,
+  allowUnknown = true,
   cliEntry = cliEntryPath,
 }: ParallelBuildOptions): ParallelPlan {
   // The user is told why the book is not built in parallel only if they asked for it
@@ -135,17 +153,42 @@ export function planParallelBuild({
         learn: true,
       };
     }
-    const indexes = chooseSplitIndexes({
+    // The entries that are not known to be safe can be used only if there is a PDF to check the result with
+    const hash = sourcesHash(config);
+    const reference = readReference(
+      layoutCachePath(config),
+      layoutCacheKey(config),
+    );
+    const choice = {
       docPages: cache.docPages,
       named: cache.named,
+      verified: cache.verified,
+      unsafe: cache.unsafe?.hash === hash ? cache.unsafe.entries : [],
       jobs,
+    };
+    const chosen = chooseSplitIndexes({
+      ...choice,
+      allowUnknown: allowUnknown && reference?.hash === hash,
     });
-    return indexes
-      ? { splitIndexes: indexes }
-      : {
-          reason: 'The book is small, or has no entry to split before.',
-          silent: true,
-        };
+    if (!chosen) {
+      return {
+        reason: 'The book is small, or has no entry to split before.',
+        silent: true,
+      };
+    }
+    // Keep the PDF of this build as the reference for the next build if it could have made use of it
+    const wantsReference =
+      allowUnknown &&
+      reference?.hash !== hash &&
+      (chooseSplitIndexes({ ...choice, allowUnknown: true })?.unverified
+        .length ?? 0) > 0;
+    return {
+      splitIndexes: chosen.splitIndexes,
+      ...(chosen.unverified.length > 0
+        ? { unverified: chosen.unverified }
+        : {}),
+      ...(chosen.unverified.length > 0 || wantsReference ? { hash } : {}),
+    };
   }
   const splitIndexes: number[] = [];
   for (const path of splitBefore) {
@@ -161,6 +204,7 @@ export function planParallelBuild({
   if (sorted.length === 0) {
     return no('"parallel.splitBefore" has no entry to split before.');
   }
+  // The entries that the user chose are trusted
   return { splitIndexes: sorted };
 }
 
@@ -260,9 +304,14 @@ const normalizeTocItems = (items: TOCItem[]): TOCItem[] =>
  * Builds the task in parts. Returns the path of the output PDF.
  */
 export async function buildInParallel(
-  options: ParallelBuildOptions & { splitIndexes: number[] },
+  options: ParallelBuildOptions & {
+    splitIndexes: number[];
+    unverified?: number[];
+    hash?: string;
+  },
 ): Promise<string> {
-  const { task, config, inlineConfig, jobs, splitIndexes } = options;
+  const { task, config, inlineConfig, jobs, splitIndexes, unverified, hash } =
+    options;
   // Aborted when the build fails, to stop the child processes that are running
   const failure = new AbortController();
   const signal = inlineConfig.signal
@@ -274,6 +323,9 @@ export async function buildInParallel(
   }
   const entryCount = task.entry.length;
   const bounds = [0, ...splitIndexes, entryCount];
+  Logger.debug(
+    `parallel > split before the entries ${JSON.stringify(splitIndexes)} (not known to be safe: ${JSON.stringify(unverified ?? [])})`,
+  );
   const partCount = bounds.length - 1;
   const cwd = inlineConfig.cwd ?? process.cwd();
 
@@ -733,6 +785,29 @@ export async function buildInParallel(
       },
     );
 
+    // Entries that are not known to be safe to split before: the book has to be the same as the book built as a
+    // whole. Otherwise, this PDF is kept as the reference for the next build, which can use it to check.
+    if (hash && unverified && unverified.length > 0) {
+      Logger.logUpdate('Checking the PDF');
+      const reference = readReference(cachePath, cacheKey);
+      if (!reference) {
+        throw new Error('The PDF to check the book with is missing.');
+      }
+      const different = firstDifferentPage(
+        reference.pages,
+        await fingerprintPdf(merged),
+      );
+      if (different !== undefined) {
+        throw new UnsafeSplitError(unverified, different);
+      }
+    } else if (hash) {
+      writeReference(cachePath, {
+        key: cacheKey,
+        hash,
+        pages: await fingerprintPdf(merged),
+      });
+    }
+
     fs.mkdirSync(upath.dirname(target.path), { recursive: true });
     Logger.logUpdate('Processing PDF');
     await postProcessPDF({
@@ -763,6 +838,9 @@ export async function buildInParallel(
       docPages: docPages.map((n) => n ?? 0),
       ...(tocNumbers ? { tocNumbers } : {}),
     });
+    if (unverified && unverified.length > 0) {
+      recordSplitResult(cachePath, cacheKey, { verified: unverified });
+    }
     return target.path;
   } catch (error) {
     // Stop the child processes that are still running
@@ -775,6 +853,41 @@ export async function buildInParallel(
       fs.rmSync(file, { force: true });
     }
   }
+}
+
+/**
+ * Builds the book in parallel if it can be. If the book built in parts turns out to be different from the book
+ * built as a whole, the entries to split before are not used again.
+ * Otherwise, returns why the book is not built in parallel.
+ */
+export async function tryParallelBuild(
+  options: ParallelBuildOptions,
+): Promise<
+  { output: string } | Exclude<ParallelPlan, { splitIndexes: number[] }>
+> {
+  const { config } = options;
+  let current = options;
+  let plan = planParallelBuild(current);
+  while ('splitIndexes' in plan) {
+    try {
+      return { output: await buildInParallel({ ...current, ...plan }) };
+    } catch (error) {
+      if (!(error instanceof UnsafeSplitError)) {
+        throw error;
+      }
+      Logger.logInfo(
+        'The book is not split before some entries, because the layout there depends on the preceding pages.',
+      );
+      recordSplitResult(layoutCachePath(config), layoutCacheKey(config), {
+        unsafe: error.entries,
+        hash: sourcesHash(config),
+      });
+      // Do not try other entries: split only before the entries that are known to be safe
+      current = { ...options, allowUnknown: false };
+      plan = planParallelBuild(current);
+    }
+  }
+  return plan;
 }
 
 /** The targets of the links of the TOC document. */

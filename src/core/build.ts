@@ -25,7 +25,7 @@ import {
 import { validateThemeCssDependencies } from '../processor/css.js';
 import { createViteServer, generateCmykReserveMap } from '../server.js';
 import { cwd, runCleanupHandlers } from '../util.js';
-import { buildInParallel, planParallelBuild } from './parallel-build.js';
+import { tryParallelBuild } from './parallel-build.js';
 import { defaultJobs } from './parallel-layout.js';
 import { applyPartSpec, takeSecretEnv } from './parallel-part.js';
 import { readPartSpec, setPartSpec } from './parallel-spec.js';
@@ -110,15 +110,15 @@ export async function build(
         jobs: requestedJobs ?? defaultJobs(),
         explicit: requestedJobs !== undefined || parallelOptions !== undefined,
       };
-      const plan = planParallelBuild(options);
-      if ('splitIndexes' in plan) {
-        logBuilt(await buildInParallel({ ...options, ...plan }));
+      const result = await tryParallelBuild(options);
+      if ('output' in result) {
+        logBuilt(result.output);
         continue;
       }
-      if (!plan.silent) {
-        Logger.logWarn(`The book is not built in parallel. ${plan.reason}`);
+      if (!result.silent) {
+        Logger.logWarn(`The book is not built in parallel. ${result.reason}`);
       }
-      learn = plan.learn === true;
+      learn = result.learn === true;
     }
 
     const viteConfig = await resolveViteConfig({

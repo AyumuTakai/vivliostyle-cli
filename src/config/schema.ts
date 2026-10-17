@@ -1028,27 +1028,31 @@ export const BuildTask = v.pipe(
           `),
         ),
         parallel: v.pipe(
-          v.partial(
-            v.object({
-              jobs: v.pipe(
-                v.number(),
-                v.integer(),
-                v.minValue(1),
-                v.description($`
-                  Number of builds that run at the same time. The build is not parallelized if it is 1 or less. The \`--jobs\` option overrides it.
-                `),
-              ),
-              splitBefore: v.pipe(
-                v.array(ValidString),
-                v.description($`
-                  Entries that start a part of the book. Each part is built by a process of its own, and the PDFs are merged. The entries are specified by the \`path\` of the entries.
-                  Choose the entries whose layout does not depend on the preceding pages (e.g. chapter covers on their own named pages).
-                `),
-              ),
-            }),
-          ),
+          v.union([
+            v.literal(false),
+            v.partial(
+              v.object({
+                jobs: v.pipe(
+                  v.number(),
+                  v.integer(),
+                  v.minValue(1),
+                  v.description($`
+                    Number of builds that run at the same time. The build is not parallelized if it is 1. (default: half of the number of the CPU cores, 2 to 4) The \`--jobs\` option overrides it.
+                  `),
+                ),
+                splitBefore: v.pipe(
+                  v.array(ValidString),
+                  v.description($`
+                    Entries that start a part of the book, specified by the \`path\` of the entries. Each part is built by a process of its own, and the PDFs are merged.
+                    Choose the entries whose layout does not depend on the preceding pages (e.g. chapter covers on their own named pages).
+                    If it is omitted, the entries are chosen automatically from what the previous build found out about the book.
+                  `),
+                ),
+              }),
+            ),
+          ]),
           v.description($`
-            Options for building the book in parts, in parallel processes (experimental).
+            Options for building a big book in parts, in parallel processes. A book of 150 pages or more that has entries starting with a named page is built in parallel automatically, after it has been built once. \`false\` turns it off.
             The PDFs of the parts are merged into one PDF. The tagged structure of the PDF is not kept. See the documentation for details and limitations.
           `),
         ),

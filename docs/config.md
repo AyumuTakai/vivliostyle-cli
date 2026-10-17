@@ -54,8 +54,8 @@ type VivliostyleConfigSchema =
   - `workspaceDir`: string  
     Directory where intermediate files (e.g., manuscript HTMLs, publication.json) are saved. (default: `.vivliostyle`)
 
-  - `parallel`: {jobs?: number; splitBefore?: (string)[]}  
-    Options for building the book in parts, in parallel processes (experimental).
+  - `parallel`: false | {jobs?: number; splitBefore?: (string)[]}  
+    Options for building a big book in parts, in parallel processes. A book of 150 pages or more that has entries starting with a named page is built in parallel automatically, after it has been built once. `false` turns it off.
     The PDFs of the parts are merged into one PDF. The tagged structure of the PDF is not kept. See the documentation for details and limitations.
 
   - ~~`includeAssets`~~ _Deprecated_  
@@ -177,10 +177,12 @@ type BuildTask = {
     | OutputConfig
     | string;
   workspaceDir?: string;
-  parallel?: {
-    jobs?: number;
-    splitBefore?: string[];
-  };
+  parallel?:
+    | false
+    | {
+        jobs?: number;
+        splitBefore?: string[];
+      };
   includeAssets?: string[] | string;
   copyAsset?: CopyAssetConfig;
   size?: string;

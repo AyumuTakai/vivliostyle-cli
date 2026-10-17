@@ -38,6 +38,13 @@ import { postProcessPDF } from '../output/pdf-postprocess.js';
 import type { PartResult } from '../output/pdf.js';
 import { cliRoot } from '../util.js';
 import {
+  chooseSplitIndexes,
+  layoutCacheKey,
+  layoutCachePath,
+  readLayoutCache,
+  writeLayoutCache,
+} from './parallel-layout.js';
+import {
   orderPartsHeavyFirst,
   secretEnv,
   serializeInlineConfig,
@@ -56,13 +63,27 @@ export interface ParallelBuildOptions {
   /** The config is read from a file, so that child processes can read it as well. */
   hasConfigFile: boolean;
   jobs: number;
+  /** The user asked for the parallel build (it is not the default). */
+  explicit?: boolean;
   /** The CLI that child processes run (default: the one of this package). */
   cliEntry?: string;
 }
 
+export type ParallelPlan =
+  | { splitIndexes: number[] }
+  | {
+      reason: string;
+      /** Not worth telling the user (the user did not ask for the parallel build). */
+      silent?: boolean;
+      /** The book should be examined by the build that is not parallel, for the next build. */
+      learn?: boolean;
+    };
+
 /**
  * Checks if the task can be built in parts. Returns the indexes of the entries that start a part,
  * or the reason why it cannot be built in parts.
+ * When the user did not choose the entries to split before (`parallel.splitBefore`), they are chosen
+ * from what the previous build found out about the book.
  */
 export function planParallelBuild({
   task,
@@ -70,40 +91,67 @@ export function planParallelBuild({
   inlineConfig,
   hasConfigFile,
   jobs,
+  explicit = true,
   cliEntry = cliEntryPath,
-}: ParallelBuildOptions): { splitIndexes: number[] } | { reason: string } {
+}: ParallelBuildOptions): ParallelPlan {
+  // The user is told why the book is not built in parallel only if they asked for it
+  const no = (reason: string): ParallelPlan => ({ reason, silent: !explicit });
   if (jobs < 2) {
-    return { reason: 'The number of jobs is less than 2.' };
+    return no('The number of jobs is less than 2.');
   }
   if (!fs.existsSync(cliEntry)) {
-    return { reason: `The CLI entry is not found: ${cliEntry}` };
+    return no(`The CLI entry is not found: ${cliEntry}`);
   }
   if (!hasConfigFile || inlineConfig.configData) {
-    return { reason: 'It needs a config file.' };
+    return no('It needs a config file.');
   }
   if (inlineConfig.vite) {
-    return { reason: 'It does not support the inline Vite config.' };
+    return no('It does not support the inline Vite config.');
   }
   if (!isWebPubConfig(config)) {
-    return { reason: 'The input is not a list of manuscripts.' };
+    return no('The input is not a list of manuscripts.');
   }
   if (config.outputs.length !== 1 || config.outputs[0].format !== 'pdf') {
-    return { reason: 'It supports a single PDF output only.' };
+    return no('It supports a single PDF output only.');
   }
   if (config.outputs[0].renderMode === 'docker') {
-    return { reason: 'It does not support the render mode "docker".' };
+    return no('It does not support the render mode "docker".');
   }
   if (task.entry.some((entry) => 'rel' in entry && entry.rel)) {
-    return { reason: 'It does not support entries that have `rel`.' };
+    return no('It does not support entries that have `rel`.');
   }
-  const splitBefore = task.parallel?.splitBefore ?? [];
+  const splitBefore = (task.parallel === false ? undefined : task.parallel)
+    ?.splitBefore;
+  if (!splitBefore) {
+    // Choose the entries from what the previous build found out about the book
+    const cache = readLayoutCache(
+      layoutCachePath(config),
+      layoutCacheKey(config),
+    );
+    if (!cache?.docPages || !cache.named) {
+      return {
+        reason: 'The book has not been examined yet.',
+        silent: true,
+        learn: true,
+      };
+    }
+    const indexes = chooseSplitIndexes({
+      docPages: cache.docPages,
+      named: cache.named,
+      jobs,
+    });
+    return indexes
+      ? { splitIndexes: indexes }
+      : {
+          reason: 'The book is small, or has no entry to split before.',
+          silent: true,
+        };
+  }
   const splitIndexes: number[] = [];
   for (const path of splitBefore) {
     const index = task.entry.findIndex((entry) => entry.path === path);
     if (index < 0) {
-      return {
-        reason: `The entry of "parallel.splitBefore" is not found: ${path}`,
-      };
+      return no(`The entry of "parallel.splitBefore" is not found: ${path}`);
     }
     splitIndexes.push(index);
   }
@@ -111,7 +159,7 @@ export function planParallelBuild({
     .filter((index) => index > 0)
     .toSorted((a, b) => a - b);
   if (sorted.length === 0) {
-    return { reason: '"parallel.splitBefore" has no entry to split before.' };
+    return no('"parallel.splitBefore" has no entry to split before.');
   }
   return { splitIndexes: sorted };
 }
@@ -184,26 +232,10 @@ async function pool(
   );
 }
 
-interface Cache {
-  key: string;
-  frontPages: number;
-  /** Number of the pages of each entry */
-  docPages: number[];
-}
-
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the caller gives the type of the file
 function readJson<T>(path: string): T {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the files are written by this module and its child processes
   return JSON.parse(fs.readFileSync(path, 'utf8')) as T;
-}
-
-function readCache(path: string, key: string): Cache | undefined {
-  try {
-    const cache = readJson<Cache>(path);
-    return cache.key === key ? cache : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 const themeSpecifier = (theme: ParsedTheme) =>
@@ -258,24 +290,14 @@ export async function buildInParallel(
   };
 
   const hasFront = Boolean(task.toc) || Boolean(task.cover);
-  // The workspace is removed by a build that is not parallel, so the cache is put in the cache directory of the
-  // project if there is one
-  const modulesDir = upath.join(config.entryContextDir, 'node_modules');
-  const cachePath = fs.existsSync(modulesDir)
-    ? upath.join(modulesDir, '.cache/vivliostyle-cli/parallel-build.json')
-    : upath.join(rootDir, 'cache.json');
-  fs.mkdirSync(upath.dirname(cachePath), { recursive: true });
-  const cacheKey = JSON.stringify({
-    entries: task.entry.map((entry) => entry.path),
-    bounds,
-    hasFront,
-  });
-  const cache = readCache(cachePath, cacheKey);
+  const cachePath = layoutCachePath(config);
+  const cacheKey = layoutCacheKey(config);
+  const cache = readLayoutCache(cachePath, cacheKey);
   // The numbers of the pages that are known (or guessed from the previous build)
   let frontPages: number | undefined = hasFront ? cache?.frontPages : 0;
   const docPages: (number | undefined)[] = Array.from(
     { length: entryCount },
-    (_, i) => cache?.docPages[i],
+    (_, i) => cache?.docPages?.[i],
   );
 
   const baseSpec = {
@@ -695,14 +717,11 @@ export async function buildInParallel(
       signal,
     });
 
-    fs.writeFileSync(
-      cachePath,
-      JSON.stringify({
-        key: cacheKey,
-        frontPages: frontPages ?? 0,
-        docPages: docPages.map((n) => n ?? 0),
-      } satisfies Cache),
-    );
+    writeLayoutCache(cachePath, {
+      key: cacheKey,
+      frontPages: frontPages ?? 0,
+      docPages: docPages.map((n) => n ?? 0),
+    });
     return target.path;
   } catch (error) {
     // Stop the child processes that are still running

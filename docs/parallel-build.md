@@ -1,12 +1,39 @@
 # Building a Large Book in Parallel (Experimental)
 
-Typesetting a book with hundreds of pages takes a long time because the pages are laid out one after another in a single browser. Vivliostyle CLI can split the book into parts, typeset the parts in parallel processes, and merge the PDFs into one PDF.
+Typesetting a book with hundreds of pages takes a long time because the pages are laid out one after another in a single browser. Vivliostyle CLI splits a big book into parts, typesets the parts in parallel processes, and merges the PDFs into one PDF.
 
 This feature is experimental. The speed-up is small for a book of less than about 150 pages, because each part has a fixed cost (starting the process and the server, compiling, and loading the viewer).
 
-## Usage
+## It is on by default
 
-Specify the entries that start a part with `parallel.splitBefore` in the config file, and the number of the builds that run at the same time with `parallel.jobs`.
+You do not need any setting. `vivliostyle build` works as follows:
+
+1. The first build of a book is a normal build. It also examines the book: the number of the pages of each entry, and whether each entry starts with a named page (the `page` property of CSS, such as a chapter cover). The result is saved in `node_modules/.cache/vivliostyle-cli/` of the project (in the workspace directory if the project has no `node_modules`). A book of less than 150 pages is not examined.
+2. From the next build, a book of 150 pages or more that has entries starting with a named page is split before such entries, into parts that have similar numbers of pages, and the parts are built in parallel.
+
+If the book is edited and the number of its pages changes, the parts are typeset again with the right page numbers (see [How it works](#how-it-works)), and the new numbers are saved.
+
+To turn it off, set `parallel: false` in the config file, or use `--jobs 1`.
+
+```js
+// vivliostyle.config.js
+export default {
+  entry: [/* ... */],
+  parallel: false,
+};
+```
+
+The number of the builds that run at the same time is half of the number of the CPU cores (2 to 4) unless you specify it with `parallel.jobs`, or with the `-j` (`--jobs`) option of `vivliostyle build`, which overrides `parallel.jobs`.
+
+```
+vivliostyle build -j 8
+```
+
+If the book cannot be built in parallel (see [Requirements](#requirements)), the book is built as usual. Vivliostyle CLI tells the reason only when you specified `parallel` or `--jobs`.
+
+## Choosing where to split yourself
+
+To choose the entries that start a part, specify them with `parallel.splitBefore` (the `path` of the entries). The automatic choice is not used then.
 
 ```js
 // vivliostyle.config.js
@@ -29,19 +56,11 @@ export default {
 };
 ```
 
-`splitBefore` takes the `path` of the entries. With the example above, the book is built in two parts: the entries before `chapter-covers/ch02.md`, and the others. The cover and the table of contents are built separately.
+With the example above, the book is built in two parts: the entries before `chapter-covers/ch02.md`, and the others. The cover and the table of contents are built separately.
 
-The number of jobs can be changed with the `-j` (`--jobs`) option of `vivliostyle build`, which overrides `parallel.jobs`.
+## Where to split
 
-```
-vivliostyle build -j 8
-```
-
-If the book cannot be built in parallel (see [Requirements](#requirements)), Vivliostyle CLI prints the reason and builds the book as usual.
-
-## Choosing where to split
-
-Choose the entries whose layout does not depend on the preceding pages: for example, chapter covers that are always put on a new page with a named page. If a part starts in the middle of a flow, the layout of its first page can differ slightly from the one of the book built as a whole. It is a good practice to build the book both ways once and compare the PDFs.
+The automatic choice splits only before entries that start with a named page, for example, chapter covers. When you choose the entries yourself, choose the ones whose layout does not depend on the preceding pages. If a part starts in the middle of a flow, the layout of its first page can differ slightly from the one of the book built as a whole. It is a good practice to build the book both ways once and compare the PDFs.
 
 Split the book into parts of similar numbers of pages. The build time is about that of the biggest part.
 

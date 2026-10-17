@@ -8,6 +8,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { VivliostyleConfigSchema } from '../src/config/schema.js';
 import { planParallelBuild } from '../src/core/parallel-build.js';
 import {
+  layoutCacheKey,
+  layoutCachePath,
+  writeLayoutCache,
+} from '../src/core/parallel-layout.js';
+import {
   applyPartSpec,
   orderPartsHeavyFirst,
   secretEnv,
@@ -37,6 +42,7 @@ afterAll(() => {
 type PlanOptions = {
   inlineConfig?: object;
   jobs?: number;
+  explicit?: boolean;
   hasConfigFile?: boolean;
   cliEntry?: string;
 };
@@ -131,12 +137,6 @@ describe('planParallelBuild', () => {
       'x.md',
     ],
     [
-      'splitBefore is not given',
-      { ...book, parallel: { jobs: 2 } },
-      {},
-      'splitBefore',
-    ],
-    [
       'splitBefore has only the first entry',
       { ...book, parallel: { splitBefore: ['a.md'] } },
       {},
@@ -146,6 +146,47 @@ describe('planParallelBuild', () => {
     const result = await plan(config, options);
     expect(result).toHaveProperty('reason');
     expect((result as { reason: string }).reason).toContain(reason);
+  });
+});
+
+describe('planParallelBuild for the default parallel build', () => {
+  const auto = { ...book };
+
+  it('asks the build to examine the book when nothing is known about it', async () => {
+    expect(await plan(auto, { explicit: false })).toEqual({
+      reason: 'The book has not been examined yet.',
+      silent: true,
+      learn: true,
+    });
+  });
+
+  it('splits the book automatically from what is known about it', async () => {
+    const config = await getTaskConfig([], cwd, auto as never);
+    writeLayoutCache(layoutCachePath(config), {
+      key: layoutCacheKey(config),
+      docPages: [60, 60, 60, 60],
+      named: [true, false, true, false],
+    });
+    expect(await plan(auto, { explicit: false, jobs: 2 })).toEqual({
+      splitIndexes: [2],
+    });
+    // splitBefore of the config is used instead if there is
+    expect(
+      await plan(
+        { ...auto, parallel: { splitBefore: ['b.md'] } },
+        { explicit: false },
+      ),
+    ).toEqual({ splitIndexes: [1] });
+  });
+
+  it('does not tell why a book that was not asked to be built in parallel is not', async () => {
+    const result = await plan(
+      { ...book, output: 'book.epub' },
+      { explicit: false },
+    );
+    expect(result).toMatchObject({ silent: true });
+    const asked = await plan({ ...book, output: 'book.epub' });
+    expect(asked).toMatchObject({ silent: false });
   });
 });
 

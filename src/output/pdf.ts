@@ -12,6 +12,11 @@ import type {
   PdfOutput,
   ResolvedTaskConfig,
 } from '../config/resolve.js';
+import {
+  layoutCacheKey,
+  layoutCachePath,
+  learnLayout,
+} from '../core/parallel-layout.js';
 import { getPartSpec } from '../core/parallel-spec.js';
 import type { CmykMap, Meta, Payload, TOCItem } from '../global-viewer.js';
 import { Logger } from '../logger.js';
@@ -24,10 +29,13 @@ export async function buildPDF({
   target,
   config,
   signal,
+  learn = false,
 }: {
   target: PdfOutput;
   config: ResolvedTaskConfig;
   signal?: AbortSignal;
+  /** Examine the layout of the book for the parallel build of the next time. */
+  learn?: boolean;
 }): Promise<string | null> {
   Logger.logUpdate(`Launching PDF build environment`);
 
@@ -305,6 +313,20 @@ export async function buildPDF({
               preferCSSPageSize: true,
             }),
       });
+
+      if (learn) {
+        try {
+          await learnLayout({
+            page,
+            config,
+            cachePath: layoutCachePath(config),
+            key: layoutCacheKey(config),
+          });
+        } catch (error) {
+          // It only helps the next build
+          Logger.debug('Failed to examine the layout of the book', error);
+        }
+      }
 
       return {
         browserVersion,

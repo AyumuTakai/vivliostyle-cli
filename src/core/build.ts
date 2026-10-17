@@ -26,6 +26,7 @@ import { validateThemeCssDependencies } from '../processor/css.js';
 import { createViteServer, generateCmykReserveMap } from '../server.js';
 import { cwd, runCleanupHandlers } from '../util.js';
 import { buildInParallel, planParallelBuild } from './parallel-build.js';
+import { defaultJobs } from './parallel-layout.js';
 import { applyPartSpec, takeSecretEnv } from './parallel-part.js';
 import { readPartSpec, setPartSpec } from './parallel-spec.js';
 
@@ -90,24 +91,36 @@ export async function build(
       );
     };
 
-    // Build the book in parts, in parallel processes
-    const jobs = inlineConfig.jobs ?? task.parallel?.jobs;
-    if (jobs && jobs > 1 && !partSpec && !containerForkMode) {
+    // Build the book in parts, in parallel processes, unless it is turned off. If the book has not been
+    // examined yet, it is examined by this build, which is not parallel (see `learn` below).
+    let learn = false;
+    const parallelOptions = task.parallel === false ? undefined : task.parallel;
+    const requestedJobs = inlineConfig.jobs ?? parallelOptions?.jobs;
+    if (
+      task.parallel !== false &&
+      (requestedJobs === undefined || requestedJobs > 1) &&
+      !partSpec &&
+      !containerForkMode
+    ) {
       const options = {
         task,
         config,
         inlineConfig,
         hasConfigFile: loadedConfig !== undefined && loadedConfig !== null,
-        jobs,
+        jobs: requestedJobs ?? defaultJobs(),
+        explicit: requestedJobs !== undefined || parallelOptions !== undefined,
       };
       const plan = planParallelBuild(options);
-      if ('reason' in plan) {
-        Logger.logWarn(`The book is not built in parallel. ${plan.reason}`);
-      } else {
+      if ('splitIndexes' in plan) {
         logBuilt(await buildInParallel({ ...options, ...plan }));
         continue;
       }
+      if (!plan.silent) {
+        Logger.logWarn(`The book is not built in parallel. ${plan.reason}`);
+      }
+      learn = plan.learn === true;
     }
+
     const viteConfig = await resolveViteConfig({
       ...config,
       mode: 'build',
@@ -182,6 +195,7 @@ export async function build(
             target,
             config,
             signal: inlineConfig.signal,
+            learn,
           });
         }
       } else if (format === 'webpub' || format === 'epub') {

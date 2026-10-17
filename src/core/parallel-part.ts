@@ -1,10 +1,6 @@
 import * as v from 'valibot';
 
-import {
-  ArticleEntryConfig,
-  type ParsedBuildTask,
-  ThemeSpecifier,
-} from '../config/schema.js';
+import { ArticleEntryConfig, type ParsedBuildTask } from '../config/schema.js';
 import type { PartSpec } from './parallel-spec.js';
 
 /**
@@ -17,28 +13,10 @@ export function applyPartSpec(
   task: ParsedBuildTask,
   spec: PartSpec,
 ): ParsedBuildTask {
-  const withTheme = (
-    entry: ParsedBuildTask['entry'][number],
-    extraTheme: string[] | undefined,
-  ): ParsedBuildTask['entry'][number] => {
-    if (!extraTheme || extraTheme.length === 0) {
-      return entry;
-    }
-    // An entry without its own theme uses the theme of the task
-    const theme = entry.theme ?? task.theme ?? [];
-    return {
-      ...entry,
-      theme: [...theme, ...v.parse(ThemeSpecifier, extraTheme)],
-    };
-  };
-
   let entry: ParsedBuildTask['entry'];
   if ('range' in spec.entries) {
     const [from, to] = spec.entries.range;
-    const { extraThemes } = spec.entries;
-    entry = task.entry
-      .slice(from, to)
-      .map((e, i) => withTheme(e, extraThemes?.[i]));
+    entry = task.entry.slice(from, to);
   } else if ('files' in spec.entries) {
     entry = spec.entries.files.map((file) => articleEntry(file));
   } else {

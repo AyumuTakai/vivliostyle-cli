@@ -31,6 +31,7 @@ export interface CliFlags {
   readingProgression?: 'ltr' | 'rtl';
   timeout?: number;
   jobs?: number;
+  compileCache?: boolean;
   partSpec?: string;
   renderMode?: 'local' | 'docker';
   preflight?: 'press-ready' | 'press-ready-local';

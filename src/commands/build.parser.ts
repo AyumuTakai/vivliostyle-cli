@@ -104,6 +104,11 @@ This option is equivalent with "--preflight press-ready"`,
       `number of builds that run at the same time when the book is built in parts (see "parallel" of the config)`,
       (value) => Number.parseInt(value, 10),
     )
+    .option(
+      '--compile-cache',
+      'keep the HTML that the manuscripts are compiled to, and use it when they have not changed (see "compileCache" of the config)',
+    )
+    .option('--no-compile-cache', 'turn off the compile cache of the config')
     .addOption(
       new Option(
         '--part-spec <path>',

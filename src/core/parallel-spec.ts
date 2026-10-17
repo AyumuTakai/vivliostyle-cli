@@ -13,8 +13,6 @@ export interface PartSpec {
     | {
         /** Entries of the config in [from, to). */
         range: [from: number, to: number];
-        /** Stylesheets added to the theme of each of these entries (by the index in the range). */
-        extraThemes?: string[][];
       }
     | {
         /** Entries that are not in the config. Paths are relative to the entry context. */
@@ -26,6 +24,12 @@ export interface PartSpec {
    * get the page number it has in the whole book (see `pageNumberOffset`).
    */
   leadingFiles?: { path: string; theme?: string[] }[];
+  /**
+   * CSS put in the head of the compiled documents (the page numbers of the part). The documents are given by
+   * the `path` of the entries; this is not done by the theme of the entries, so that the documents compiled
+   * can be taken from the compile cache.
+   */
+  inlineStyles?: { path: string; css: string }[];
   /** Remove `toc` and `cover` from the config. */
   withoutTocAndCover?: boolean;
   /** Path of the file to be written. */

@@ -30,6 +30,7 @@ import {
   toError,
   writeFileIfChanged,
 } from '../util.js';
+import { getCompileCache, injectStyle, listFiles } from './compile-cache.js';
 import {
   collectCssPackageImports,
   type PostcssConfig,
@@ -415,6 +416,95 @@ export async function transformManuscript(
   return html;
 }
 
+/**
+ * Compiles the entry, using the compile cache if it is on, and puts the styles that the parallel build gives
+ * (the page numbers of the part) in the compiled document.
+ */
+async function transformManuscriptWithCache(
+  entry: ParsedEntry,
+  config: ResolvedTaskConfig & { viewerInput: WebPublicationManifestConfig },
+): Promise<string | undefined> {
+  const { workspaceDir, entryContextDir, language, vfmOptions } = config;
+  const source = isManuscriptEntry(entry) ? entry.source : undefined;
+  const cache = getCompileCache();
+  const spec = getPartSpec();
+  const cacheable =
+    cache !== undefined &&
+    source?.type === 'file' &&
+    !spec?.precompiledDirs &&
+    (source.documentProcessor !== undefined ||
+      source.contentType === 'text/html' ||
+      source.contentType === 'application/xhtml+xml') &&
+    !pathEquals(source.pathname, entry.target) &&
+    !cache.isExcluded(source.pathname);
+
+  const css =
+    source?.type === 'file'
+      ? spec?.inlineStyles?.find((style) =>
+          pathEquals(
+            source.pathname,
+            upath.resolve(entryContextDir, style.path),
+          ),
+        )?.css
+      : undefined;
+  const write = (html: string): string => {
+    if (css === undefined) {
+      return html;
+    }
+    const styled = injectStyle(html, css);
+    writeFileIfChanged(entry.target, Buffer.from(styled, 'utf8'));
+    return styled;
+  };
+
+  if (!cacheable || !source || source.type !== 'file') {
+    const html = await transformManuscript(entry, config);
+    return html === undefined ? html : write(html);
+  }
+
+  const key = cache.key({
+    source: fs.readFileSync(source.pathname),
+    options: {
+      processor: source.documentProcessor ? 'document-processor' : 'html',
+      contentType: source.contentType,
+      target: upath.relative(workspaceDir, entry.target),
+      style: entry.themes.flatMap((theme) =>
+        locateThemePath(theme, upath.dirname(entry.target)),
+      ),
+      title: entry.title,
+      language,
+      vfmOptions,
+      rel: entry.rel,
+    },
+  });
+  const cached = cache.get(key);
+  if (cached !== undefined) {
+    Logger.debug('compile cache > hit', source.pathname);
+    fs.mkdirSync(upath.dirname(entry.target), { recursive: true });
+    writeFileIfChanged(entry.target, Buffer.from(cached, 'utf8'));
+    return write(cached);
+  }
+
+  Logger.debug('compile cache > miss', source.pathname);
+  const before = listFiles(workspaceDir);
+  const html = await transformManuscript(entry, config);
+  if (html === undefined) {
+    return html;
+  }
+  // A plugin may write other files; they would be missing when the HTML is taken from the cache
+  const written = [...listFiles(workspaceDir)].filter(
+    (path) => !before.has(path) && !pathEquals(path, entry.target),
+  );
+  if (written.length > 0) {
+    Logger.debug(
+      'compile cache > not kept, because other files were written',
+      written,
+    );
+  } else {
+    cache.set(key, html);
+  }
+  return write(html);
+}
+
 export function generateManifest({
   entryContextDir,
   workspaceDir,
@@ -462,10 +552,15 @@ export async function compile(
       tocEntries.push(entry);
       continue;
     }
-    await transformManuscript(entry, config);
+    await transformManuscriptWithCache(entry, config);
   }
   for (const entry of tocEntries) {
-    await transformManuscript(entry, config);
+    await transformManuscriptWithCache(entry, config);
+  }
+  const cache = getCompileCache();
+  if (cache) {
+    Logger.debug(`compile cache > ${cache.hits} hits, ${cache.misses} misses`);
+    cache.prune();
   }
 
   // generate manifest

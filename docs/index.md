@@ -16,6 +16,7 @@
 - [Creating Cover Page](./cover-page.md)
 - [Special Output Settings](./special-output-settings.md)
 - [Building a Large Book in Parallel (Experimental)](./parallel-build.md)
+- [Compile Cache (Experimental)](./compile-cache.md)
 - [Frontend Framework Support](./frontend-framework-support.md)
 
 </li>

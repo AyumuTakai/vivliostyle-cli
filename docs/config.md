@@ -58,6 +58,10 @@ type VivliostyleConfigSchema =
     Options for building a big book in parts, in parallel processes. A book of 150 pages or more that has entries starting with a named page is built in parallel automatically, after it has been built once. `false` turns it off.
     The PDFs of the parts are merged into one PDF. The tagged structure of the PDF is not kept. See the documentation for details and limitations.
 
+  - `compileCache`: boolean | {exclude?: (string)[]; maxSize?: number | string}  
+    Keep the HTML that the manuscripts are compiled to, and use it when the manuscript and the code of the config have not changed (experimental).
+    The code of the config is the scripts and JSON files beside the config file, and the lock file. The cache does not know what the document processor and the plugins read from elsewhere (time, environment variables, network, files in other directories), so turn it on only when the result depends on the manuscript and the config.
+
   - ~~`includeAssets`~~ _Deprecated_  
     Use `copyAsset.includes` instead.
 
@@ -182,6 +186,12 @@ type BuildTask = {
     | {
         jobs?: number;
         splitBefore?: string[];
+      };
+  compileCache?:
+    | boolean
+    | {
+        exclude?: string[];
+        maxSize?: number | string;
       };
   includeAssets?: string[] | string;
   copyAsset?: CopyAssetConfig;

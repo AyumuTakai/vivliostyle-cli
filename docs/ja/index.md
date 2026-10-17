@@ -14,6 +14,7 @@
 - [表紙ページの作成](./cover-page.md)
 - [特別な出力設定](./special-output-settings.md)
 - [大きな本の並列ビルド (実験的機能)](./parallel-build.md)
+- [コンパイルキャッシュ (実験的機能)](./compile-cache.md)
 - [フロントエンドフレームワークのサポート](./frontend-framework-support.md)
 
 </li>

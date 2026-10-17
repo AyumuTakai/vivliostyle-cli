@@ -428,16 +428,14 @@ export async function buildInParallel(
       const [from, to] = [bounds[index], bounds[index + 1]];
       // A page number is counted from the first page of the part, and is reset by each document. So each
       // document is given the page number it has in the whole book.
-      const extraThemes: string[][] = [];
+      const inlineStyles: { path: string; css: string }[] = [];
       for (let i = from; i < to; i++) {
         const number = startNumber(i);
         usedNumber[i] = number;
-        extraThemes.push([
-          temporaryFile(
-            `offset-${i}.css`,
-            `@page :nth(1) { counter-reset: page ${number - 1}; }\n`,
-          ),
-        ]);
+        inlineStyles.push({
+          path: task.entry[i].path ?? '',
+          css: `@page :nth(1) { counter-reset: page ${number - 1}; }`,
+        });
       }
       // A spare page makes the first page of the part be on the same side (left/right) as in the book
       const leadingFiles: PartSpec['leadingFiles'] = [];
@@ -452,7 +450,8 @@ export async function buildInParallel(
       const pdf = upath.join(workDir, `part-${index}.pdf`);
       const resultPath = upath.join(workDir, `part-${index}.result.json`);
       await run(`part-${index}`, {
-        entries: { range: [from, to], extraThemes },
+        entries: { range: [from, to] },
+        inlineStyles,
         leadingFiles,
         withoutTocAndCover: true,
         output: { path: pdf, format: 'pdf' },

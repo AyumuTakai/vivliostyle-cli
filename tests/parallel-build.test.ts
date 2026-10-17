@@ -207,17 +207,13 @@ describe('applyPartSpec', () => {
   const specifiers = (themes: { specifier: string }[] | undefined) =>
     themes?.map((theme) => theme.specifier);
 
-  it('keeps the entries of a range, with the extra theme', () => {
+  it('keeps the entries of a range as they are', () => {
     const result = applyPartSpec(task, {
       ...spec,
-      entries: { range: [1, 3], extraThemes: [['x.css'], []] },
+      entries: { range: [1, 3] },
       withoutTocAndCover: true,
     });
-    expect(result.entry.map((entry) => entry.path)).toEqual(['b.md', 'c.md']);
-    // the entry's own theme replaces the theme of the task; the extra theme is added
-    expect(specifiers(result.entry[0].theme)).toEqual(['own.css', 'x.css']);
-    // an entry without extra theme is left as it is
-    expect(result.entry[1]).toEqual(task.entry[2]);
+    expect(result.entry).toEqual([task.entry[1], task.entry[2]]);
     expect(result.toc).toBeUndefined();
     expect(result.cover).toBeUndefined();
     expect(result.parallel).toBeUndefined();
@@ -225,13 +221,8 @@ describe('applyPartSpec', () => {
     expect(result.workspaceDir).toBe('/tmp/part');
   });
 
-  it('adds the extra theme to the theme of the task for an entry without own theme', () => {
-    const result = applyPartSpec(task, {
-      ...spec,
-      entries: { range: [0, 1], extraThemes: [['x.css']] },
-    });
-    expect(specifiers(result.entry[0].theme)).toEqual(['base.css', 'x.css']);
-    // toc and cover are left
+  it('leaves toc and cover unless it is told to remove them', () => {
+    const result = applyPartSpec(task, { ...spec, entries: { range: [0, 1] } });
     expect(result.toc).toBeDefined();
     expect(result.cover).toBeDefined();
   });

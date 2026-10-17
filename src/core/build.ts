@@ -18,6 +18,10 @@ import { buildPDF } from '../output/pdf.js';
 import { buildWebPublication } from '../output/webbook.js';
 import { copyAssets } from '../processor/asset.js';
 import {
+  createCompileCache,
+  setCompileCache,
+} from '../processor/compile-cache.js';
+import {
   cleanupWorkspace,
   compile,
   prepareThemeDirectory,
@@ -120,6 +124,8 @@ export async function build(
       }
       learn = result.learn === true;
     }
+
+    setCompileCache(createCompileCache({ task, config, inlineConfig }));
 
     const viteConfig = await resolveViteConfig({
       ...config,

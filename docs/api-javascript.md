@@ -92,6 +92,10 @@ build({
 
 `boolean` \| \{ `fallback?`: [`CmykConversion`](#cmykconversion) \| [`CmykConvertFunction`](#cmykconvertfunction); `ifIncompatibleImagesFound?`: `"warn"` \| `"error"` \| `"ignore"`; `ifUnmappedColorsFound?`: `"warn"` \| `"error"` \| `"ignore"`; `mapOutput?`: `string`; `overrideMap?`: \[`string` \| \{ `b`: `number`; `g`: `number`; `r`: `number`; \}, \{ `c`: `number`; `k`: `number`; `m`: `number`; `y`: `number`; \}\][]; `reserveMap?`: \[`string` \| \{ `b`: `number`; `g`: `number`; `r`: `number`; \}, \{ `c`: `number`; `k`: `number`; `m`: `number`; `y`: `number`; \}\][]; `warnUnmapped?`: `boolean`; \} = `CmykSchema`
 
+###### compileCache?
+
+`boolean` = `...`
+
 ###### config?
 
 `string` = `...`
@@ -351,6 +355,10 @@ Scaffold a new Vivliostyle project.
 ###### cmyk?
 
 `boolean` \| \{ `fallback?`: [`CmykConversion`](#cmykconversion) \| [`CmykConvertFunction`](#cmykconvertfunction); `ifIncompatibleImagesFound?`: `"warn"` \| `"error"` \| `"ignore"`; `ifUnmappedColorsFound?`: `"warn"` \| `"error"` \| `"ignore"`; `mapOutput?`: `string`; `overrideMap?`: \[`string` \| \{ `b`: `number`; `g`: `number`; `r`: `number`; \}, \{ `c`: `number`; `k`: `number`; `m`: `number`; `y`: `number`; \}\][]; `reserveMap?`: \[`string` \| \{ `b`: `number`; `g`: `number`; `r`: `number`; \}, \{ `c`: `number`; `k`: `number`; `m`: `number`; `y`: `number`; \}\][]; `warnUnmapped?`: `boolean`; \} = `CmykSchema`
+
+###### compileCache?
+
+`boolean` = `...`
 
 ###### config?
 
@@ -743,6 +751,10 @@ Scaffold a new Vivliostyle theme package.
 
 `boolean` \| \{ `fallback?`: [`CmykConversion`](#cmykconversion) \| [`CmykConvertFunction`](#cmykconvertfunction); `ifIncompatibleImagesFound?`: `"warn"` \| `"error"` \| `"ignore"`; `ifUnmappedColorsFound?`: `"warn"` \| `"error"` \| `"ignore"`; `mapOutput?`: `string`; `overrideMap?`: \[`string` \| \{ `b`: `number`; `g`: `number`; `r`: `number`; \}, \{ `c`: `number`; `k`: `number`; `m`: `number`; `y`: `number`; \}\][]; `reserveMap?`: \[`string` \| \{ `b`: `number`; `g`: `number`; `r`: `number`; \}, \{ `c`: `number`; `k`: `number`; `m`: `number`; `y`: `number`; \}\][]; `warnUnmapped?`: `boolean`; \} = `CmykSchema`
 
+###### compileCache?
+
+`boolean` = `...`
+
 ###### config?
 
 `string` = `...`
@@ -1000,6 +1012,10 @@ Scaffold a new Vivliostyle theme package.
 ###### cmyk?
 
 `boolean` \| \{ `fallback?`: [`CmykConversion`](#cmykconversion) \| [`CmykConvertFunction`](#cmykconvertfunction); `ifIncompatibleImagesFound?`: `"warn"` \| `"error"` \| `"ignore"`; `ifUnmappedColorsFound?`: `"warn"` \| `"error"` \| `"ignore"`; `mapOutput?`: `string`; `overrideMap?`: \[`string` \| \{ `b`: `number`; `g`: `number`; `r`: `number`; \}, \{ `c`: `number`; `k`: `number`; `m`: `number`; `y`: `number`; \}\][]; `reserveMap?`: \[`string` \| \{ `b`: `number`; `g`: `number`; `r`: `number`; \}, \{ `c`: `number`; `k`: `number`; `m`: `number`; `y`: `number`; \}\][]; `warnUnmapped?`: `boolean`; \} = `CmykSchema`
+
+###### compileCache?
+
+`boolean` = `...`
 
 ###### config?
 
@@ -1279,6 +1295,10 @@ Open a browser for previewing the publication.
 
 `boolean` \| \{ `fallback?`: [`CmykConversion`](#cmykconversion) \| [`CmykConvertFunction`](#cmykconvertfunction); `ifIncompatibleImagesFound?`: `"warn"` \| `"error"` \| `"ignore"`; `ifUnmappedColorsFound?`: `"warn"` \| `"error"` \| `"ignore"`; `mapOutput?`: `string`; `overrideMap?`: \[`string` \| \{ `b`: `number`; `g`: `number`; `r`: `number`; \}, \{ `c`: `number`; `k`: `number`; `m`: `number`; `y`: `number`; \}\][]; `reserveMap?`: \[`string` \| \{ `b`: `number`; `g`: `number`; `r`: `number`; \}, \{ `c`: `number`; `k`: `number`; `m`: `number`; `y`: `number`; \}\][]; `warnUnmapped?`: `boolean`; \} = `CmykSchema`
 
+###### compileCache?
+
+`boolean` = `...`
+
 ###### config?
 
 `string` = `...`
@@ -1538,6 +1558,10 @@ Validate a Vivliostyle theme package.
 ###### cmyk?
 
 `boolean` \| \{ `fallback?`: [`CmykConversion`](#cmykconversion) \| [`CmykConvertFunction`](#cmykconvertfunction); `ifIncompatibleImagesFound?`: `"warn"` \| `"error"` \| `"ignore"`; `ifUnmappedColorsFound?`: `"warn"` \| `"error"` \| `"ignore"`; `mapOutput?`: `string`; `overrideMap?`: \[`string` \| \{ `b`: `number`; `g`: `number`; `r`: `number`; \}, \{ `c`: `number`; `k`: `number`; `m`: `number`; `y`: `number`; \}\][]; `reserveMap?`: \[`string` \| \{ `b`: `number`; `g`: `number`; `r`: `number`; \}, \{ `c`: `number`; `k`: `number`; `m`: `number`; `y`: `number`; \}\][]; `warnUnmapped?`: `boolean`; \} = `CmykSchema`
+
+###### compileCache?
+
+`boolean` = `...`
 
 ###### config?
 
@@ -1915,6 +1939,7 @@ interface to the schema, so a drift in either direction is rejected.
 | <a id="property-category"></a> `category?` | `"novel"` \| `"magazine"` \| `"journal"` \| `"report"` \| `"misc"` |
 | <a id="property-cliversion"></a> `cliVersion` | `string` |
 | <a id="property-cmyk"></a> `cmyk?` | `boolean` \| \{ `fallback?`: [`CmykConversion`](#cmykconversion) \| [`CmykConvertFunction`](#cmykconvertfunction); `ifIncompatibleImagesFound?`: `"warn"` \| `"error"` \| `"ignore"`; `ifUnmappedColorsFound?`: `"warn"` \| `"error"` \| `"ignore"`; `mapOutput?`: `string`; `overrideMap?`: \[`string` \| \{ `b`: `number`; `g`: `number`; `r`: `number`; \}, \{ `c`: `number`; `k`: `number`; `m`: `number`; `y`: `number`; \}\][]; `reserveMap?`: \[`string` \| \{ `b`: `number`; `g`: `number`; `r`: `number`; \}, \{ `c`: `number`; `k`: `number`; `m`: `number`; `y`: `number`; \}\][]; `warnUnmapped?`: `boolean`; \} |
+| <a id="property-compilecache"></a> `compileCache?` | `boolean` |
 | <a id="property-config"></a> `config?` | `string` |
 | <a id="property-configdata"></a> `configData?` | [`VivliostyleConfigSchema`](#vivliostyleconfigschema) \| `null` |
 | <a id="property-coreversion"></a> `coreVersion` | `string` |
@@ -1996,6 +2021,7 @@ interface to the schema, so a drift in either direction is rejected.
 | <a id="property-category-1"></a> `category` | `"novel"` \| `"magazine"` \| `"journal"` \| `"report"` \| `"misc"` |
 | <a id="property-cliversion-1"></a> `cliVersion` | `string` |
 | <a id="property-cmyk-1"></a> `cmyk?` | `boolean` \| \{ `fallback?`: [`CmykConversion`](#cmykconversion) \| [`CmykConvertFunction`](#cmykconvertfunction); `ifIncompatibleImagesFound?`: `"warn"` \| `"error"` \| `"ignore"`; `ifUnmappedColorsFound?`: `"warn"` \| `"error"` \| `"ignore"`; `mapOutput?`: `string`; `overrideMap?`: \[`string` \| \{ `b`: `number`; `g`: `number`; `r`: `number`; \}, \{ `c`: `number`; `k`: `number`; `m`: `number`; `y`: `number`; \}\][]; `reserveMap?`: \[`string` \| \{ `b`: `number`; `g`: `number`; `r`: `number`; \}, \{ `c`: `number`; `k`: `number`; `m`: `number`; `y`: `number`; \}\][]; `warnUnmapped?`: `boolean`; \} |
+| <a id="property-compilecache-1"></a> `compileCache?` | `boolean` |
 | <a id="property-config-1"></a> `config?` | `string` |
 | <a id="property-configdata-1"></a> `configData?` | [`VivliostyleConfigSchema`](#vivliostyleconfigschema) \| `null` |
 | <a id="property-coreversion-1"></a> `coreVersion` | `string` |

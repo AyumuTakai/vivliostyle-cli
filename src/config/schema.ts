@@ -1056,6 +1056,31 @@ export const BuildTask = v.pipe(
             The PDFs of the parts are merged into one PDF. The tagged structure of the PDF is not kept. See the documentation for details and limitations.
           `),
         ),
+        compileCache: v.pipe(
+          v.union([
+            v.boolean(),
+            v.partial(
+              v.object({
+                exclude: v.pipe(
+                  v.array(ValidString),
+                  v.description($`
+                    Sources that are not cached, as paths relative to the entry context, file names, or directories.
+                  `),
+                ),
+                maxSize: v.pipe(
+                  v.union([v.number(), ValidString]),
+                  v.description($`
+                    The size of the cache, in bytes or with a unit (e.g. \`512MB\`). The oldest files are removed when it is bigger. (default: \`512MB\`)
+                  `),
+                ),
+              }),
+            ),
+          ]),
+          v.description($`
+            Keep the HTML that the manuscripts are compiled to, and use it when the manuscript and the code of the config have not changed (experimental).
+            The code of the config is the scripts and JSON files beside the config file, and the lock file. The cache does not know what the document processor and the plugins read from elsewhere (time, environment variables, network, files in other directories), so turn it on only when the result depends on the manuscript and the config.
+          `),
+        ),
         /** @deprecated */
         includeAssets: v.pipe(
           v.union([v.array(ValidString), ValidString]),
@@ -1613,6 +1638,12 @@ export const VivliostyleInlineConfigWithoutChecks = v.partial(
       v.boolean(),
       v.description($`
           Disable the startup of the preview server during the build process.
+        `),
+    ),
+    compileCache: v.pipe(
+      v.boolean(),
+      v.description($`
+          Turn the compile cache on or off (see \`compileCache\` of the config).
         `),
     ),
     jobs: v.pipe(

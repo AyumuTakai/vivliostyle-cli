@@ -56,6 +56,7 @@ export function mergeInlineConfig(
     viteConfigFile,
     host,
     port,
+    compileCache,
     ...overrideInlineOptions
   } = inlineConfig;
 
@@ -77,6 +78,7 @@ export function mergeInlineConfig(
         browser,
         vite,
         viteConfigFile,
+        compileCache,
       }),
       output: (output?.length ? output : task.output)?.map((o) =>
         Object.assign(

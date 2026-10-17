@@ -7,6 +7,7 @@
 > - **大きな本の並列ビルド**(既定で有効、実験的): 本をパートに分けて並列のプロセスで組版し、PDF を結合します。ページ番号、目次、しおり、リンクは、本全体を組版した場合と同じになります。[docs/parallel-build.md](docs/parallel-build.md)
 > - **コンパイルキャッシュ**(`compileCache`、オプトイン、実験的): 変更のない原稿は HTML への変換を省きます。[docs/compile-cache.md](docs/compile-cache.md)
 > - ビューアの完了待ちの短縮など、ビルドの固定コストの削減。
+> - テーマが参照するファイルのコピー漏れの修正、エントリーコンテキストの外への `@import` のエラー化など。
 >
 > 計測に使った 169 ページの本(表紙・目次つき)では、公式の 34.0 秒に対して、並列ビルドで 13.3 秒、コンパイルキャッシュも使うと 11.5 秒でした。出力は、公式と全ページがピクセル単位で一致しています。
 >
@@ -16,6 +17,8 @@
 > pnpm install && pnpm build:cli
 > ln -s "$PWD/dist/cli.js" /usr/local/bin/vn
 > ```
+>
+> 公式にない機能と修正の一覧は [docs/fork-features.md](docs/fork-features.md) にあります。
 >
 > 公式へのプルリクエストは予定していません。生成 AI の利用については [AI_POLICY.md](AI_POLICY.md) に従い、コミットに `Assisted-by` を記載しています。
 > 組版エンジンのフォークは [AyumuTakai/vivliostyle.js](https://github.com/AyumuTakai/vivliostyle.js) です。

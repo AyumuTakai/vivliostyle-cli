@@ -10,6 +10,7 @@ import upath from 'upath';
 
 import type { ResolvedTaskConfig } from '../config/resolve.js';
 import { importNodeModule } from '../node-modules.js';
+import { collectLocalCssReferences } from '../processor/css.js';
 import { manuscriptEntries } from './parallel-layout.js';
 
 /** Positions are kept in 0.1 pt. */
@@ -124,7 +125,8 @@ export function firstDifferentPage(
 
 /**
  * A hash of what the typesetting of the book depends on: the sources of the entries, the style files that are
- * given by the config, and the options of the layout. The imports of the style files are not followed.
+ * given by the config with the files they refer to (imported style files, images, fonts), and the options of the
+ * layout.
  */
 export function sourcesHash(config: ResolvedTaskConfig): string {
   const hash = createHash('sha1');
@@ -146,6 +148,9 @@ export function sourcesHash(config: ResolvedTaskConfig): string {
   for (const theme of config.themeIndexes) {
     if (theme.type === 'file') {
       addFile(theme.source);
+      for (const file of collectLocalCssReferences(theme.source)) {
+        addFile(file);
+      }
     } else {
       hash.update(theme.name);
     }

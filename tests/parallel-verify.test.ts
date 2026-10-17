@@ -141,6 +141,14 @@ describe('sourcesHash and the reference', () => {
     expect(sourcesHash(await config({ size: 'A5' }))).not.toBe(afterStyle);
   });
 
+  it('changes when a file that the style file imports changes', async () => {
+    fs.writeFileSync(upath.join(cwd, 'part.css'), 'h1 { color: red; }\n');
+    fs.appendFileSync(upath.join(cwd, 'style.css'), "@import 'part.css';\n");
+    const before = sourcesHash(await config());
+    fs.appendFileSync(upath.join(cwd, 'part.css'), 'h2 { color: red; }\n');
+    expect(sourcesHash(await config())).not.toBe(before);
+  });
+
   it('is written next to the cache, for the same book only', () => {
     const cachePath = upath.join(cwd, 'cache/parallel-build.json');
     expect(referencePathOf(cachePath)).toBe(

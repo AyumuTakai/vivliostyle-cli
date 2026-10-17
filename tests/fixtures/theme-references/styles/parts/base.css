@@ -1,0 +1,4 @@
+@import '../shared.css';
+p {
+  background: url('../img/mark.svg#icon');
+}

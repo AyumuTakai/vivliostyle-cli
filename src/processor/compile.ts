@@ -33,6 +33,7 @@ import {
 import { getCompileCache, injectStyle, listFiles } from './compile-cache.js';
 import {
   collectCssPackageImports,
+  collectLocalCssReferences,
   type PostcssConfig,
   resolvePackageCssEntry,
   resolvePackageCssSubpath,
@@ -198,16 +199,46 @@ export async function prepareThemeDirectory(
     });
   }
 
-  // copy theme files
+  // copy theme files, and the files they refer to with relative URLs (the
+  // stylesheets they import, images and fonts)
   for (const theme of themeIndexes) {
     if (theme.type === 'file' && !pathEquals(theme.source, theme.location)) {
       fs.mkdirSync(upath.dirname(theme.location), { recursive: true });
       await copy(theme.source, theme.location);
+      await copyThemeReferences(theme.source, theme.location, workspaceDir);
     }
   }
 
   // Return all local theme paths (symlink targets in node_modules)
   return getLocalThemePaths({ themesDir });
+}
+
+/**
+ * Copies the files that a theme file refers to with relative URLs, keeping
+ * their places relative to the theme file. Files that would be put out of the
+ * workspace are not copied.
+ */
+async function copyThemeReferences(
+  source: string,
+  location: string,
+  workspaceDir: string,
+): Promise<void> {
+  for (const file of collectLocalCssReferences(source)) {
+    const target = upath.resolve(
+      upath.dirname(location),
+      upath.relative(upath.dirname(source), file),
+    );
+    if (!pathContains(workspaceDir, target)) {
+      Logger.logWarn(
+        `The file that the theme ${source} refers to is not copied, as it is out of the directory of the project: ${file}`,
+      );
+      continue;
+    }
+    if (!pathEquals(file, target)) {
+      fs.mkdirSync(upath.dirname(target), { recursive: true });
+      await copy(file, target);
+    }
+  }
 }
 
 export async function transformManuscript(

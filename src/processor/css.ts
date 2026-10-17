@@ -509,6 +509,75 @@ function collectImportRules(
 }
 
 /**
+ * Finds the local files that a stylesheet refers to with relative URLs: the
+ * stylesheets of its `@import` rules (and the files they refer to, in turn)
+ * and the files of its `url()` values, such as images and fonts. The files
+ * that do not exist are left out.
+ */
+export function collectLocalCssReferences(styleFile: string): string[] {
+  const files = new Set<string>();
+  const visited = new Set<string>();
+  const queue = [upath.normalize(styleFile)];
+  for (let file = queue.shift(); file !== undefined; file = queue.shift()) {
+    if (visited.has(file)) {
+      continue;
+    }
+    visited.add(file);
+    let root: postcss.Root;
+    try {
+      root = postcss.parse(fs.readFileSync(file, 'utf8'), { from: file });
+    } catch (error) {
+      Logger.debug('Could not read the stylesheet %s: %o', file, error);
+      continue;
+    }
+    const dir = upath.dirname(file);
+    const toLocalFile = (url: string): string | undefined => {
+      // Absolute URLs (with a scheme or from the root) and fragments are not files beside the stylesheet
+      if (
+        !url ||
+        /^[a-z][\d+.a-z\-]*:/iv.test(url) ||
+        url.startsWith('/') ||
+        url.startsWith('#')
+      ) {
+        return undefined;
+      }
+      let path = stripUrlQuery(url);
+      try {
+        path = decodeURI(path);
+      } catch {
+        // kept as is
+      }
+      const resolved = upath.resolve(dir, path);
+      return isFileSync(resolved) ? resolved : undefined;
+    };
+    for (const { specifier } of collectImportRules(root)) {
+      const imported = toLocalFile(specifier);
+      if (imported?.endsWith('.css')) {
+        files.add(imported);
+        queue.push(imported);
+      }
+    }
+    root.walkDecls((decl) => {
+      valueParser(decl.value).walk((node) => {
+        if (node.type === 'function' && node.value.toLowerCase() === 'url') {
+          const [inner] = node.nodes;
+          if (inner && (inner.type === 'string' || inner.type === 'word')) {
+            const referred = toLocalFile(inner.value);
+            if (referred) {
+              files.add(referred);
+            }
+          }
+          // The value in url() is not looked into
+          return false;
+        }
+        return true;
+      });
+    });
+  }
+  return [...files];
+}
+
+/**
  * Rewrite npm-style bare specifiers in `@import` rules into relative URLs
  * that work on the server URL space. Specifiers that resolve as relative
  * files keep the standard CSS semantics and are left untouched. The plugins

@@ -1,0 +1,18 @@
+@import 'parts/base.css';
+@import url('parts/print.css') print;
+@font-face {
+  font-family: 'Sample';
+  src: url('fonts/sample.woff2?v=2') format('woff2');
+}
+h1 {
+  background: url(img/mark.svg) no-repeat;
+}
+.data {
+  background: url(data:image/gif;base64,R0lGODlhAQABAAAAACw=);
+}
+.remote {
+  background: url(https://example.com/remote.png);
+}
+.missing {
+  background: url(missing.png);
+}

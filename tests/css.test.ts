@@ -22,6 +22,7 @@ import { Logger } from '../src/logger.js';
 import {
   clearPostcssConfigCache,
   collectCssPackageImports,
+  collectLocalCssReferences,
   loadPostcssConfig,
   parseBareImportSpecifier,
   resolveLocalStyleFile,
@@ -139,6 +140,45 @@ describe('resolveLocalStyleFile', () => {
     expect(resolveLocalStyleFile('b.txt', projectDir)).toBeUndefined();
     expect(resolveLocalStyleFile('missing.css', projectDir)).toBeUndefined();
     expect(resolveLocalStyleFile('dir.css', projectDir)).toBeUndefined();
+  });
+});
+
+describe('collectLocalCssReferences', () => {
+  it('follows the relative imports and collects the files of url() values', () => {
+    writeFiles({
+      'styles/theme.css': [
+        "@import 'parts/base.css';",
+        '@import url(parts/print.css?v=1) print;',
+        "@import 'https://example.com/remote.css';",
+        "@import 'some-package';",
+        "@font-face { font-family: X; src: url('fonts/x%20y.woff2') format('woff2'); }",
+        'h1 { background: url(img/a.svg#icon), url(data:image/gif;base64,AA==); }',
+        '.b { background: url(/root.png), url(#frag), url(missing.png); }',
+      ].join('\n'),
+      'styles/parts/base.css':
+        "@import '../theme.css'; p { background: url('../../outside.png'); }",
+      'styles/parts/print.css': 'p { color: black; }',
+      'styles/fonts/x y.woff2': '',
+      'styles/img/a.svg': '<svg/>',
+      'styles/unused.css': '',
+      'outside.png': '',
+    });
+    expect(new Set(collectLocalCssReferences(abs('styles/theme.css')))).toEqual(
+      new Set([
+        abs('styles/parts/base.css'),
+        abs('styles/parts/print.css'),
+        abs('styles/fonts/x y.woff2'),
+        abs('styles/img/a.svg'),
+        abs('styles/theme.css'),
+        abs('outside.png'),
+      ]),
+    );
+  });
+
+  it('gives nothing for a stylesheet that cannot be read', () => {
+    writeFiles({ 'broken.css': 'a { color: red' });
+    expect(collectLocalCssReferences(abs('broken.css'))).toEqual([]);
+    expect(collectLocalCssReferences(abs('none.css'))).toEqual([]);
   });
 });
 

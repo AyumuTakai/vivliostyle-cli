@@ -611,3 +611,22 @@ it('reject import style file that is not exist', async () => {
     'Could not find a style path not-exist.css for the theme: debug-theme',
   );
 });
+
+it('copies the files that a theme out of the entry context refers to', async () => {
+  await runCommand(['build'], {
+    cwd: resolveFixture('theme-references'),
+  });
+  const fileList = await glob('styles/**', {
+    cwd: resolveFixture('theme-references/.vs-workspace'),
+  });
+  expect(new Set(fileList)).toEqual(
+    new Set([
+      'styles/theme.css',
+      'styles/parts/base.css',
+      'styles/parts/print.css',
+      'styles/shared.css',
+      'styles/img/mark.svg',
+      'styles/fonts/sample.woff2',
+    ]),
+  );
+});

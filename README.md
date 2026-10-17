@@ -1,3 +1,25 @@
+> [!NOTE]
+> **このリポジトリは、公式の [Vivliostyle CLI](https://github.com/vivliostyle/vivliostyle-cli) の個人用フォークです。**
+> This is a personal fork of the official [Vivliostyle CLI](https://github.com/vivliostyle/vivliostyle-cli). For the official releases and documentation, see the official repository and [docs.vivliostyle.org](https://docs.vivliostyle.org).
+>
+> 公式との主な違い:
+>
+> - **大きな本の並列ビルド**(既定で有効、実験的): 本をパートに分けて並列のプロセスで組版し、PDF を結合します。ページ番号、目次、しおり、リンクは、本全体を組版した場合と同じになります。[docs/parallel-build.md](docs/parallel-build.md)
+> - **コンパイルキャッシュ**(`compileCache`、オプトイン、実験的): 変更のない原稿は HTML への変換を省きます。[docs/compile-cache.md](docs/compile-cache.md)
+> - ビューアの完了待ちの短縮など、ビルドの固定コストの削減。
+>
+> 計測に使った 169 ページの本(表紙・目次つき)では、公式の 34.0 秒に対して、並列ビルドで 13.3 秒、コンパイルキャッシュも使うと 11.5 秒でした。出力は、公式と全ページがピクセル単位で一致しています。
+>
+> このフォークは、公式の `vivliostyle` コマンドと併用するため、`vn` コマンドとして使っています(ビルドして `dist/cli.js` へのシンボリックリンクを置きます)。
+>
+> ```sh
+> pnpm install && pnpm build:cli
+> ln -s "$PWD/dist/cli.js" /usr/local/bin/vn
+> ```
+>
+> 公式へのプルリクエストは予定していません。生成 AI の利用については [AI_POLICY.md](AI_POLICY.md) に従い、コミットに `Assisted-by` を記載しています。
+> 組版エンジンのフォークは [AyumuTakai/vivliostyle.js](https://github.com/AyumuTakai/vivliostyle.js) です。
+
 ![Vivliostyle CLI](assets/cover.jpg)
 
 [![npm](https://flat.badgen.net/npm/v/@vivliostyle/cli)][npm-url]

@@ -630,3 +630,22 @@ it('copies the files that a theme out of the entry context refers to', async () 
     ]),
   );
 });
+
+it('rejects a stylesheet in the entry context that imports a file out of it', async () => {
+  await expect(
+    runCommand(['build', '-c', 'error.config.js'], {
+      cwd: resolveFixture('css-import-out-of-context'),
+    }),
+  ).rejects.toThrow('Stylesheets in the entry context import files out of it');
+});
+
+it('allows a theme in the entry context to import a file out of it', async () => {
+  await runCommand(['build', '-c', 'theme.config.js'], {
+    cwd: resolveFixture('css-import-out-of-context'),
+  });
+  expect(
+    fs.existsSync(
+      resolveFixture('css-import-out-of-context/.vs-theme/shared/outside.css'),
+    ),
+  ).toBe(true);
+});

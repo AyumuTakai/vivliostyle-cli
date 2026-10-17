@@ -25,6 +25,7 @@ import {
   readPackageJson,
   toError,
 } from '../util.js';
+import { getAssetMatcher } from './asset.js';
 
 export interface CssBareImportResolution {
   file: string;
@@ -927,6 +928,89 @@ export function collectThemeCssEntryFiles(themeIndexes: Set<ParsedTheme>): {
     }
   }
   return { files, errors };
+}
+
+/**
+ * Throws when a stylesheet in the entry context imports a file out of it with
+ * a relative URL. The files out of the entry context are not in the
+ * publication, so the import would fail (404) when the book is typeset. The
+ * theme files and the files they refer to are copied with the themes, and
+ * are not checked.
+ */
+export async function validateCssImportsInEntryContext(
+  config: Pick<
+    ResolvedTaskConfig,
+    | 'entryContextDir'
+    | 'workspaceDir'
+    | 'copyAsset'
+    | 'outputs'
+    | 'themesDir'
+    | 'entries'
+    | 'themeIndexes'
+  >,
+): Promise<void> {
+  const { entryContextDir } = config;
+  const themeFiles = new Set<string>();
+  for (const theme of config.themeIndexes) {
+    if (theme.type === 'file') {
+      for (const file of [
+        theme.source,
+        ...collectLocalCssReferences(theme.source),
+      ]) {
+        themeFiles.add(upath.normalize(file));
+      }
+    }
+  }
+  const relWorkspaceDir = upath.relative(entryContextDir, config.workspaceDir);
+  const assets = await getAssetMatcher({
+    ...config,
+    cwd: entryContextDir,
+    ignore: relWorkspaceDir ? [upath.join(relWorkspaceDir, '**')] : [],
+  }).glob({ followSymbolicLinks: true });
+  const problems: string[] = [];
+  const styleFiles = [...assets]
+    .filter((path) => path.endsWith('.css'))
+    .toSorted();
+  for (const asset of styleFiles) {
+    const file = upath.resolve(entryContextDir, asset);
+    if (themeFiles.has(file)) {
+      continue;
+    }
+    let root: postcss.Root;
+    try {
+      root = postcss.parse(fs.readFileSync(file, 'utf8'), { from: file });
+    } catch {
+      // A stylesheet that cannot be read is reported when it is used
+      continue;
+    }
+    for (const { specifier } of collectImportRules(root)) {
+      if (
+        !specifier ||
+        /^[a-z][\d+.a-z\-]*:/iv.test(specifier) ||
+        specifier.startsWith('/')
+      ) {
+        continue;
+      }
+      const target = upath.resolve(
+        upath.dirname(file),
+        stripUrlQuery(specifier),
+      );
+      if (!pathContains(entryContextDir, target)) {
+        problems.push(`${asset}: @import '${specifier}'`);
+      }
+    }
+  }
+  if (problems.length > 0) {
+    throw new DetailError(
+      'Stylesheets in the entry context import files out of it',
+      [
+        ...problems,
+        '',
+        `The files out of the entry context (${entryContextDir}) are not included in the publication, so they cannot be imported.`,
+        'Move them into the entry context, or set the stylesheet that imports them as a theme.',
+      ].join('\n'),
+    );
+  }
 }
 
 /**

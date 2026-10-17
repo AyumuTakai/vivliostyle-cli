@@ -1,0 +1,3 @@
+@import '../shared/outside.css';
+@import 'parts/inner.css';
+@import url('https://example.com/remote.css');

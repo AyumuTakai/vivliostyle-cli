@@ -26,7 +26,10 @@ import {
   compile,
   prepareThemeDirectory,
 } from '../processor/compile.js';
-import { validateThemeCssDependencies } from '../processor/css.js';
+import {
+  validateCssImportsInEntryContext,
+  validateThemeCssDependencies,
+} from '../processor/css.js';
 import { createViteServer, generateCmykReserveMap } from '../server.js';
 import { cwd, runCleanupHandlers } from '../util.js';
 import { tryParallelBuild } from './parallel-build.js';
@@ -174,6 +177,7 @@ export async function build(
         await cleanupWorkspace(config);
         await prepareThemeDirectory(config, inlineConfig.signal);
         await validateThemeCssDependencies(config);
+        await validateCssImportsInEntryContext(config);
         await compile(config);
         if (partSpec?.compiledMark) {
           fs.writeFileSync(partSpec.compiledMark, '');

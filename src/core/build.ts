@@ -26,7 +26,7 @@ import { validateThemeCssDependencies } from '../processor/css.js';
 import { createViteServer, generateCmykReserveMap } from '../server.js';
 import { cwd, runCleanupHandlers } from '../util.js';
 import { buildInParallel, planParallelBuild } from './parallel-build.js';
-import { applyPartSpec } from './parallel-part.js';
+import { applyPartSpec, takeSecretEnv } from './parallel-part.js';
 import { readPartSpec, setPartSpec } from './parallel-spec.js';
 
 export async function build(
@@ -39,7 +39,11 @@ export async function build(
     : undefined;
   setPartSpec(partSpec);
   const inlineConfig: ParsedVivliostyleInlineConfig = partSpec
-    ? { ...givenInlineConfig, ...partSpec.inlineConfig }
+    ? {
+        ...givenInlineConfig,
+        ...partSpec.inlineConfig,
+        ...takeSecretEnv(process.env),
+      }
     : givenInlineConfig;
   Logger.setLogOptions({ ...inlineConfig, containerForkMode });
   if (containerForkMode) {

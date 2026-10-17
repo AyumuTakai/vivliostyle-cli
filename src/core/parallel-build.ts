@@ -37,7 +37,11 @@ import {
 import { postProcessPDF } from '../output/pdf-postprocess.js';
 import type { PartResult } from '../output/pdf.js';
 import { cliRoot } from '../util.js';
-import { serializeInlineConfig } from './parallel-part.js';
+import {
+  orderPartsHeavyFirst,
+  secretEnv,
+  serializeInlineConfig,
+} from './parallel-part.js';
 import type { PartSpec } from './parallel-spec.js';
 import { destinationNameOf, readTocItems } from './parallel-toc.js';
 
@@ -117,15 +121,18 @@ function runChild({
   specPath,
   config,
   cwd,
+  env,
   signal,
 }: {
   spec: PartSpec;
   specPath: string;
   config: string | undefined;
   cwd: string;
+  env: Record<string, string>;
   signal?: AbortSignal;
 }): Promise<void> {
-  fs.writeFileSync(specPath, JSON.stringify(spec));
+  // The spec has the endpoint of the shared browser, which must not be known to other users of the machine
+  fs.writeFileSync(specPath, JSON.stringify(spec), { mode: 0o600 });
   const args = [
     cliEntryPath,
     'build',
@@ -137,7 +144,7 @@ function runChild({
     signal?.throwIfAborted();
     const child = spawn(process.execPath, args, {
       cwd,
-      env: { ...process.env, NO_COLOR: 'true' },
+      env: { ...process.env, ...env, NO_COLOR: 'true' },
       stdio: ['ignore', 'pipe', 'pipe'],
       signal,
     });
@@ -238,7 +245,7 @@ export async function buildInParallel(
   const rootDir = upath.join(config.workspaceDir, '.parallel');
   const runId = `${process.pid}-${Date.now()}`;
   const workDir = upath.join(rootDir, runId);
-  fs.mkdirSync(workDir, { recursive: true });
+  fs.mkdirSync(workDir, { recursive: true, mode: 0o700 });
   const temporaryFiles: string[] = [];
   const temporaryFile = (name: string, content: string): string => {
     const file = upath.join(
@@ -280,6 +287,7 @@ export async function buildInParallel(
       specPath: upath.join(workDir, `${name}.json`),
       config: inlineConfig.config,
       cwd,
+      env: secretEnv(inlineConfig),
       signal,
     });
 
@@ -460,8 +468,10 @@ export async function buildInParallel(
           (_, j) => bounds[index] + j,
         ).some((i) => usedNumber[i] !== startNumber(i)),
       );
+    const heavyFirst = (parts: number[]) =>
+      orderPartsHeavyFirst(parts, bounds, docPages);
     const settle = async () => {
-      let pending = mismatchedParts();
+      let pending = heavyFirst(mismatchedParts());
       for (let round = 1; pending.length > 0; round++) {
         if (round > MAX_ROUNDS) {
           throw new Error(
@@ -481,7 +491,7 @@ export async function buildInParallel(
           // the cover and the TOC with dummy numbers, to know the number of their pages
           results.every((r) => !r) ? compile().then(dummyFront) : undefined,
         ]);
-        pending = mismatchedParts();
+        pending = heavyFirst(mismatchedParts());
       }
     };
     await settle();

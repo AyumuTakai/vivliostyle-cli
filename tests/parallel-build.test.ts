@@ -9,7 +9,11 @@ import { VivliostyleConfigSchema } from '../src/config/schema.js';
 import { planParallelBuild } from '../src/core/parallel-build.js';
 import {
   applyPartSpec,
+  orderPartsHeavyFirst,
+  secretEnv,
+  secretEnvName,
   serializeInlineConfig,
+  takeSecretEnv,
 } from '../src/core/parallel-part.js';
 import { destinationNameOf, readTocItems } from '../src/core/parallel-toc.js';
 import { getTaskConfig, rootPath } from './command-util.js';
@@ -248,6 +252,64 @@ describe('serializeInlineConfig', () => {
       logLevel: 'silent',
       sandbox: true,
     });
+  });
+});
+
+describe('secrets of the inline config', () => {
+  it('are left out of the serialized config', () => {
+    expect(
+      serializeInlineConfig({
+        cwd: '/work',
+        proxyServer: 'http://proxy:8080',
+        proxyUser: 'user',
+        proxyPass: 'secret',
+      }),
+    ).toEqual({ cwd: '/work', proxyServer: 'http://proxy:8080' });
+  });
+
+  it('are handed over by the environment and taken back', () => {
+    const env = secretEnv({ proxyUser: 'user', proxyPass: 'secret' });
+    expect(env).toEqual({
+      VS_CLI_PARALLEL_PROXY_USER: 'user',
+      VS_CLI_PARALLEL_PROXY_PASS: 'secret',
+    });
+    expect(secretEnvName('proxyPass')).toBe('VS_CLI_PARALLEL_PROXY_PASS');
+    const childEnv: NodeJS.ProcessEnv = { PATH: '/bin', ...env };
+    expect(takeSecretEnv(childEnv)).toEqual({
+      proxyUser: 'user',
+      proxyPass: 'secret',
+    });
+    // the secrets do not stay in the environment of the child process
+    expect(childEnv).toEqual({ PATH: '/bin' });
+  });
+
+  it('gives nothing when there is no secret', () => {
+    expect(secretEnv({})).toEqual({});
+    expect(takeSecretEnv({ PATH: '/bin' })).toEqual({});
+  });
+});
+
+describe('orderPartsHeavyFirst', () => {
+  // parts: [0,2) [2,3) [3,6)
+  const bounds = [0, 2, 3, 6];
+
+  it('puts the parts with more pages first', () => {
+    expect(
+      orderPartsHeavyFirst([0, 1, 2], bounds, [3, 4, 20, 1, 1, 1]),
+    ).toEqual([1, 0, 2]);
+  });
+
+  it('uses the order of the config when the pages are not known', () => {
+    expect(orderPartsHeavyFirst([0, 1, 2], bounds, [])).toEqual([0, 1, 2]);
+    expect(
+      orderPartsHeavyFirst([2, 0], bounds, [undefined, undefined, 5]),
+    ).toEqual([0, 2]);
+  });
+
+  it('orders only the given parts', () => {
+    expect(orderPartsHeavyFirst([2, 1], bounds, [9, 9, 1, 2, 2, 2])).toEqual([
+      2, 1,
+    ]);
   });
 });
 

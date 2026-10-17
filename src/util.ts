@@ -730,7 +730,30 @@ export const cliVersion = (() => {
   return readPackageJson(upath.join(cliRoot, 'package.json')).version;
 })();
 
-export const viewerRoot = findPackageDir('@vivliostyle/viewer', cliRoot);
+/** Whether the viewer is the one given by the environment variable `VS_CLI_VIEWER_ROOT` */
+let viewerFromEnvironment = false;
+
+/**
+ * The directory of the viewer package: the one given by the environment
+ * variable `VS_CLI_VIEWER_ROOT` (a viewer package whose `lib` is built, such
+ * as `packages/viewer` of a fork of Vivliostyle.js), or `@vivliostyle/viewer`
+ * of the CLI.
+ */
+export const viewerRoot = ((): string | undefined => {
+  const given = process.env.VS_CLI_VIEWER_ROOT;
+  if (given) {
+    const dir = upath.resolve(given);
+    if (fs.existsSync(upath.join(dir, 'lib/index.html'))) {
+      viewerFromEnvironment = true;
+      return dir;
+    }
+    // Not with the Logger, which imports this module
+    process.stderr.write(
+      `The viewer given by VS_CLI_VIEWER_ROOT is not built (there is no lib/index.html), so the viewer of the CLI is used: ${dir}\n`,
+    );
+  }
+  return findPackageDir('@vivliostyle/viewer', cliRoot);
+})();
 export const coreVersion = (() => {
   if (import.meta.env?.VITEST) {
     return '0.0.1';
@@ -742,4 +765,4 @@ export const coreVersion = (() => {
 })();
 
 export const versionForDisplay = `cli: ${cliVersion}
-core: ${coreVersion}`;
+core: ${coreVersion}${viewerFromEnvironment ? ` (${viewerRoot})` : ''}`;

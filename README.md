@@ -11,11 +11,11 @@
 >
 > 計測に使った 169 ページの本(表紙・目次つき)では、公式の 34.0 秒に対して、並列ビルドで 13.3 秒、コンパイルキャッシュも使うと 11.5 秒でした。出力は、公式と全ページがピクセル単位で一致しています。
 >
-> このフォークは、公式の `vivliostyle` コマンドと併用するため、`vn` コマンドとして使っています(ビルドして `dist/cli.js` へのシンボリックリンクを置きます)。
+> このフォークは、公式の `vivliostyle` コマンドと併用するため、`vn` コマンド(`bin/vn`)として使っています。`vn` は、隣に置いた [vivliostyle.js のフォーク](https://github.com/AyumuTakai/vivliostyle.js)のビューア(`packages/viewer`)で組版します。ビルドされていなければ、同梱の公式のビューアを使います。
 >
 > ```sh
 > pnpm install && pnpm build:cli
-> ln -s "$PWD/dist/cli.js" /usr/local/bin/vn
+> ln -s "$PWD/bin/vn" /usr/local/bin/vn
 > ```
 >
 > 公式にない機能と修正の一覧は [docs/fork-features.md](docs/fork-features.md) にあります。

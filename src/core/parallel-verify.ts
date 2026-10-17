@@ -11,6 +11,7 @@ import upath from 'upath';
 import type { ResolvedTaskConfig } from '../config/resolve.js';
 import { importNodeModule } from '../node-modules.js';
 import { collectLocalCssReferences } from '../processor/css.js';
+import { viewerRoot } from '../util.js';
 import { manuscriptEntries } from './parallel-layout.js';
 
 /** Positions are kept in 0.1 pt. */
@@ -125,8 +126,8 @@ export function firstDifferentPage(
 
 /**
  * A hash of what the typesetting of the book depends on: the sources of the entries, the style files that are
- * given by the config with the files they refer to (imported style files, images, fonts), and the options of the
- * layout.
+ * given by the config with the files they refer to (imported style files, images, fonts), the viewer, and the options
+ * of the layout.
  */
 export function sourcesHash(config: ResolvedTaskConfig): string {
   const hash = createHash('sha1');
@@ -154,6 +155,10 @@ export function sourcesHash(config: ResolvedTaskConfig): string {
     } else {
       hash.update(theme.name);
     }
+  }
+  // The viewer typesets the book; it may be another build of the same version
+  if (viewerRoot) {
+    addFile(upath.join(viewerRoot, 'lib/js/vivliostyle-viewer.js'));
   }
   hash.update(
     JSON.stringify([

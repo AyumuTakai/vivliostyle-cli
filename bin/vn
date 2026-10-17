@@ -1,0 +1,10 @@
+#!/bin/sh
+# The `vn` command of this fork: the CLI (dist/cli.js) with the viewer of the fork of Vivliostyle.js.
+# The viewer is packages/viewer of the vivliostyle.js repository beside this repository, or the directory given by
+# VS_CLI_VIEWER_ROOT. Without a built viewer there, the viewer of the CLI (@vivliostyle/viewer) is used.
+cli_dir=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+if [ -z "${VS_CLI_VIEWER_ROOT:-}" ] && [ -f "$cli_dir/../vivliostyle.js/packages/viewer/lib/index.html" ]; then
+  VS_CLI_VIEWER_ROOT=$(cd "$cli_dir/../vivliostyle.js/packages/viewer" && pwd)
+  export VS_CLI_VIEWER_ROOT
+fi
+exec node "$cli_dir/dist/cli.js" "$@"

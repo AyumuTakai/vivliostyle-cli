@@ -298,8 +298,12 @@ export async function learnLayout({
   ) {
     return false;
   }
+  const pagesOfSpine = new Map<number, number>();
+  for (const spine of spineIndexes) {
+    pagesOfSpine.set(spine, (pagesOfSpine.get(spine) ?? 0) + 1);
+  }
   const pagesOf = config.entries.map(
-    (_, index) => spineIndexes.filter((spine) => spine === index).length,
+    (_, index) => pagesOfSpine.get(index) ?? 0,
   );
   const frontPages = config.entries.reduce(
     (sum, entry, index) => (isManuscript(entry) ? sum : sum + pagesOf[index]),

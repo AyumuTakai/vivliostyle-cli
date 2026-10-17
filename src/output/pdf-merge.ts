@@ -139,12 +139,10 @@ export async function mergePdfs(
 
   signal?.throwIfAborted();
   if (resolveDestination) {
-    const defined = new Set(destinations.map(({ name }) => name));
-    for (const name of [...requiredDestinations, ...linkedNames]) {
-      if (defined.has(name)) {
-        continue;
-      }
-      defined.add(name);
+    const missing = new Set(requiredDestinations)
+      .union(linkedNames)
+      .difference(new Set(destinations.map(({ name }) => name)));
+    for (const name of missing) {
       const destination = resolveDestination(name);
       if (destination) {
         destinations.push({

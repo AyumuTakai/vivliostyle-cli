@@ -1,14 +1,14 @@
 // Builds a book in parts, in parallel processes, and merges the PDFs (experimental).
 //
-// - The entries of the book are split at the entries of `parallel.splitBefore`. A child process of this
-//   CLI builds each part (see parallel-spec.ts), and a PDF is written without post-processing.
-// - A part is typeset with the page numbers it has in the whole book. The number of the pages of the preceding
-//   parts is taken from the previous build; if it turns out to be different, the parts are built again.
-//   Documents of spare pages are put before the part to give the number to the first page of the part
-//   (and are removed afterwards), because a named page cannot reset the page counter.
-// - The cover and the table of contents are built after the parts: the TOC is generated from the compiled
-//   documents, and the page numbers of the links are written as text, since the parts do not know each other.
-// - The PDFs are merged, and the outline, the metadata, etc. are written to the merged PDF by the post-processing.
+// - The entries of the book are split into parts (see `planParallelBuild`). A child process of this CLI builds
+//   each part (see parallel-spec.ts) and writes the PDF without post-processing.
+// - A part is typeset with the page numbers it has in the whole book: each document of the part is given the
+//   number of its first page. The numbers of the pages are taken from the previous build; if they turn out to be
+//   different, the parts are built again.
+// - The cover and the TOC are built separately: the TOC is generated from the compiled documents, and the page
+//   numbers of its links are written as text, since the parts do not know each other.
+// - The PDFs are merged, and the outline, the links between the parts, the metadata, etc. are made for the
+//   merged PDF.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -19,6 +19,7 @@ import { launchSharedBrowser } from '../browser.js';
 import {
   type ParsedEntry,
   type ParsedTheme,
+  type PdfOutput,
   type ResolvedTaskConfig,
   isWebPubConfig,
 } from '../config/resolve.js';
@@ -36,9 +37,11 @@ import {
 } from '../output/pdf-merge.js';
 import { postProcessPDF } from '../output/pdf-postprocess.js';
 import type { PartResult } from '../output/pdf.js';
+import { injectStyle } from '../processor/compile-cache.js';
 import { cliRoot } from '../util.js';
 import {
   chooseSplitIndexes,
+  type LayoutCache,
   recordSplitResult,
   layoutCacheKey,
   layoutCachePath,
@@ -300,427 +303,553 @@ const normalizeTocItems = (items: TOCItem[]): TOCItem[] =>
     children: normalizeTocItems(item.children),
   }));
 
-/**
- * Builds the task in parts. Returns the path of the output PDF.
- */
-export async function buildInParallel(
-  options: ParallelBuildOptions & {
-    splitIndexes: number[];
-    unverified?: number[];
-    hash?: string;
-  },
-): Promise<string> {
-  const { task, config, inlineConfig, jobs, splitIndexes, unverified, hash } =
-    options;
-  // Aborted when the build fails, to stop the child processes that are running
-  const failure = new AbortController();
-  const signal = inlineConfig.signal
-    ? AbortSignal.any([inlineConfig.signal, failure.signal])
-    : failure.signal;
-  const target = config.outputs[0];
-  if (target.format !== 'pdf') {
-    throw new Error('A PDF output is expected.');
-  }
-  const entryCount = task.entry.length;
-  const bounds = [0, ...splitIndexes, entryCount];
-  Logger.debug(
-    `parallel > split before the entries ${JSON.stringify(splitIndexes)} (not known to be safe: ${JSON.stringify(unverified ?? [])})`,
-  );
-  const partCount = bounds.length - 1;
-  const cwd = inlineConfig.cwd ?? process.cwd();
+const range = (from: number, to: number): number[] =>
+  Array.from({ length: to - from }, (_, i) => from + i);
 
-  // Files of a build are put in a directory of its own, so that builds can run at the same time
-  const rootDir = upath.join(config.workspaceDir, '.parallel');
-  const runId = `${process.pid}-${Date.now()}`;
-  const workDir = upath.join(rootDir, runId);
-  fs.mkdirSync(workDir, { recursive: true, mode: 0o700 });
-  const temporaryFiles: string[] = [];
-  const temporaryFile = (name: string, content: string): string => {
+/** The number of the pages of each document, from the documents of the pages. */
+function countPages(spineIndexes: readonly number[]): Map<number, number> {
+  const pages = new Map<number, number>();
+  for (const spine of spineIndexes) {
+    pages.set(spine, (pages.get(spine) ?? 0) + 1);
+  }
+  return pages;
+}
+
+/** A place in the body (the pages after the cover and the TOC) */
+interface Place {
+  page: number;
+  x: number;
+  y: number;
+}
+
+type ParallelBuildRun = ParallelBuildOptions & {
+  splitIndexes: number[];
+  unverified?: number[];
+  hash?: string;
+};
+
+/**
+ * A build of a book in parts. `run()` builds the parts, the cover and the TOC, and merges them.
+ */
+class ParallelBuild {
+  private readonly task: ParsedBuildTask;
+  private readonly config: ResolvedTaskConfig;
+  private readonly inlineConfig: ParsedVivliostyleInlineConfig;
+  private readonly jobs: number;
+  private readonly unverified: number[];
+  private readonly hash: string | undefined;
+  private readonly target: PdfOutput;
+  /** The entries that start each part, followed by the number of the entries */
+  private readonly bounds: number[];
+  private readonly partCount: number;
+  private readonly entryCount: number;
+
+  /** Aborted when the build fails, to stop the child processes that are running */
+  private readonly failure = new AbortController();
+  private readonly signal: AbortSignal;
+  private readonly runId = `${process.pid}-${Date.now()}`;
+  /** Files of a build are put in a directory of its own, so that builds can run at the same time */
+  private readonly workDir: string;
+  private readonly temporaryFiles: string[] = [];
+  private browserWsEndpoint = '';
+  private closeBrowser: (() => Promise<void>) | undefined;
+
+  private readonly cachePath: string;
+  private readonly cacheKey: string;
+  private readonly cache: LayoutCache | undefined;
+  private readonly cover: ParsedEntry | undefined;
+  private readonly contents: ParsedEntry | undefined;
+  private readonly basePath: string;
+  /** The URL of the TOC document, which the links of the TOC are relative to */
+  private readonly tocUrl: string;
+
+  /** The number of the pages of the cover and the TOC, and of each entry, as they are known now */
+  private frontPages: number | undefined;
+  private readonly docPages: (number | undefined)[];
+  /** The page number that the first page of each entry was given */
+  private readonly usedNumber: (number | undefined)[];
+  private readonly results: (PartResult | undefined)[];
+  /** The number of the spare pages at the beginning of each part */
+  private readonly skipped: number[];
+  private compiled: Promise<void> | undefined;
+  private readonly places = new Map<string, Place>();
+  private front: { pdf: string; result: PartResult } | undefined;
+  private tocNumbers: Record<string, string> | undefined;
+
+  constructor(options: ParallelBuildRun) {
+    const { task, config, inlineConfig } = options;
+    this.task = task;
+    this.config = config;
+    this.inlineConfig = inlineConfig;
+    this.jobs = options.jobs;
+    this.unverified = options.unverified ?? [];
+    this.hash = options.hash;
+    const target = config.outputs[0];
+    if (target.format !== 'pdf') {
+      throw new Error('A PDF output is expected.');
+    }
+    this.target = target;
+    this.entryCount = task.entry.length;
+    this.bounds = [0, ...options.splitIndexes, this.entryCount];
+    this.partCount = this.bounds.length - 1;
+    Logger.debug(
+      `parallel > split before the entries ${JSON.stringify(options.splitIndexes)} (not known to be safe: ${JSON.stringify(this.unverified)})`,
+    );
+    this.signal = inlineConfig.signal
+      ? AbortSignal.any([inlineConfig.signal, this.failure.signal])
+      : this.failure.signal;
+
+    this.workDir = upath.join(config.workspaceDir, '.parallel', this.runId);
+    fs.mkdirSync(this.workDir, { recursive: true, mode: 0o700 });
+
+    this.cachePath = layoutCachePath(config);
+    this.cacheKey = layoutCacheKey(config);
+    this.cache = readLayoutCache(this.cachePath, this.cacheKey);
+    this.cover = config.entries.find((e) => e.rel === 'cover');
+    this.contents = config.entries.find((e) => e.rel === 'contents');
+    this.basePath = `${config.base.replace(/\/$/v, '')}/`;
+    this.tocUrl = `http://localhost:0${this.basePath}${
+      this.contents
+        ? upath.relative(config.workspaceDir, this.contents.target)
+        : ''
+    }`;
+
+    this.frontPages = this.hasFront ? this.cache?.frontPages : 0;
+    this.docPages = range(0, this.entryCount).map(
+      (i) => this.cache?.docPages?.[i],
+    );
+    this.usedNumber = Array.from({ length: this.entryCount });
+    this.results = Array.from({ length: this.partCount });
+    this.skipped = Array.from({ length: this.partCount }, () => 0);
+  }
+
+  private get hasFront(): boolean {
+    return Boolean(this.task.toc) || Boolean(this.task.cover);
+  }
+
+  async run(): Promise<string> {
+    const started = Date.now();
+    try {
+      const browser = await launchSharedBrowser(this.config);
+      this.browserWsEndpoint = browser.wsEndpoint;
+      this.closeBrowser = browser.closeBrowser;
+
+      const speculativeFront = this.startSpeculativeFront();
+      await this.buildParts();
+      Logger.debug(`parallel > parts built in ${Date.now() - started} ms`);
+      this.updatePlaces();
+      if (this.hasFront) {
+        await this.buildFront(await speculativeFront);
+      }
+      const merged = await this.merge();
+      await this.checkOrKeepReference(merged);
+      await this.postProcess(merged);
+      this.saveLayout();
+      return this.target.path;
+    } catch (error) {
+      // Stop the child processes that are still running
+      this.failure.abort(error);
+      throw error;
+    } finally {
+      await this.closeBrowser?.();
+      fs.rmSync(this.workDir, { recursive: true, force: true });
+      for (const file of this.temporaryFiles) {
+        fs.rmSync(file, { force: true });
+      }
+    }
+  }
+
+  // ---- child processes ---------------------------------------------------------------------------------------
+
+  private runChild(name: string, spec: Omit<PartSpec, 'inlineConfig'>) {
+    return runChild({
+      spec: {
+        inlineConfig: serializeInlineConfig(this.inlineConfig),
+        browserWsEndpoint: this.browserWsEndpoint,
+        ...spec,
+      },
+      specPath: upath.join(this.workDir, `${name}.json`),
+      config: this.inlineConfig.config,
+      cwd: this.inlineConfig.cwd ?? process.cwd(),
+      env: secretEnv(this.inlineConfig),
+      signal: this.signal,
+    });
+  }
+
+  private readResult(name: string): PartResult {
+    return readJson<PartResult>(
+      upath.join(this.workDir, `${name}.result.json`),
+    );
+  }
+
+  /** Writes a file in the entry context, where the files of the entries are looked for. */
+  private temporaryFile(name: string, content: string): string {
     const file = upath.join(
-      config.entryContextDir,
-      `${TEMPORARY_FILE_PREFIX}${runId}-${name}`,
+      this.config.entryContextDir,
+      `${TEMPORARY_FILE_PREFIX}${this.runId}-${name}`,
     );
     fs.writeFileSync(file, content);
-    temporaryFiles.push(file);
+    this.temporaryFiles.push(file);
     return upath.basename(file);
-  };
+  }
 
-  const hasFront = Boolean(task.toc) || Boolean(task.cover);
-  const cachePath = layoutCachePath(config);
-  const cacheKey = layoutCacheKey(config);
-  const cache = readLayoutCache(cachePath, cacheKey);
-  // The numbers of the pages that are known (or guessed from the previous build)
-  let frontPages: number | undefined = hasFront ? cache?.frontPages : 0;
-  const docPages: (number | undefined)[] = Array.from(
-    { length: entryCount },
-    (_, i) => cache?.docPages?.[i],
-  );
+  private partDir(index: number): string {
+    return upath.join(this.workDir, `part-${index}`);
+  }
 
-  const baseSpec = {
-    inlineConfig: serializeInlineConfig(inlineConfig),
-  } satisfies Partial<PartSpec>;
-  const run = (name: string, spec: Omit<PartSpec, 'inlineConfig'>) =>
-    runChild({
-      spec: { ...baseSpec, ...spec },
-      specPath: upath.join(workDir, `${name}.json`),
-      config: inlineConfig.config,
-      cwd,
-      env: secretEnv(inlineConfig),
-      signal,
-    });
+  private compiledMark(index: number): string {
+    return `${this.partDir(index)}.compiled`;
+  }
+
+  // ---- the parts ---------------------------------------------------------------------------------------------
 
   /** Page number of the first page of the entry in the whole book (as it is known now) */
-  const startNumber = (entryIndex: number): number => {
-    let number = (frontPages ?? 0) + 1;
+  private startNumber(entryIndex: number): number {
+    let number = (this.frontPages ?? 0) + 1;
     for (let i = 0; i < entryIndex; i++) {
-      number += docPages[i] ?? 0;
+      number += this.docPages[i] ?? 0;
     }
     return number;
-  };
+  }
 
-  const t0 = Date.now();
-  let sharedBrowser:
-    | Awaited<ReturnType<typeof launchSharedBrowser>>
-    | undefined;
-  try {
-    sharedBrowser = await launchSharedBrowser(config);
-    const browserWsEndpoint = sharedBrowser.wsEndpoint;
-
-    // ---- compile the whole book to get the cover and the TOC ----------------------------------------------
-    const compileDir = upath.join(workDir, 'compile');
-    const partDirs = Array.from({ length: partCount }, (_, i) =>
-      upath.join(workDir, `part-${i}`),
-    );
-    const marks = partDirs.map((dir) => `${dir}.compiled`);
-    for (const mark of marks) {
-      fs.rmSync(mark, { force: true });
+  private async buildPart(index: number): Promise<void> {
+    const [from, to] = [this.bounds[index], this.bounds[index + 1]];
+    // A page number is counted from the first page of the part, and is reset by each document. So each
+    // document is given the page number it has in the whole book.
+    const inlineStyles = range(from, to).map((i) => {
+      const number = this.startNumber(i);
+      this.usedNumber[i] = number;
+      return {
+        path: this.task.entry[i].path ?? '',
+        css: `@page :nth(1) { counter-reset: page ${number - 1}; }`,
+      };
+    });
+    // A spare page makes the first page of the part be on the same side (left/right) as in the book
+    const leadingFiles: PartSpec['leadingFiles'] =
+      this.startNumber(from) % 2 === 0
+        ? [
+            {
+              path: this.temporaryFile(
+                `spare-${index}.html`,
+                '<!doctype html><html><head><meta charset="utf-8"><title>spare</title></head><body><p>.</p></body></html>',
+              ),
+            },
+          ]
+        : [];
+    const name = `part-${index}`;
+    await this.runChild(name, {
+      entries: { range: [from, to] },
+      inlineStyles,
+      leadingFiles,
+      withoutTocAndCover: true,
+      output: { path: upath.join(this.workDir, `${name}.pdf`), format: 'pdf' },
+      workspaceDir: this.partDir(index),
+      resultPath: upath.join(this.workDir, `${name}.result.json`),
+      compiledMark: this.compiledMark(index),
+    });
+    const result = this.readResult(name);
+    const pages = countPages(spineIndexesOf(result, `the part ${index}`));
+    const spare = leadingFiles.length;
+    this.results[index] = result;
+    this.skipped[index] = spare ? (pages.get(0) ?? 0) : 0;
+    for (const i of range(from, to)) {
+      this.docPages[i] = pages.get(i - from + spare) ?? 0;
     }
-    let compiled: Promise<void> | undefined;
-    const compile = () => (compiled ??= compileOnce());
-    const compileOnce = async () => {
-      if (!hasFront) {
+  }
+
+  /** The parts that were built with page numbers that turned out to be wrong (or were not built) */
+  private mismatchedParts(): number[] {
+    return range(0, this.partCount).filter((index) =>
+      range(this.bounds[index], this.bounds[index + 1]).some(
+        (i) => this.usedNumber[i] !== this.startNumber(i),
+      ),
+    );
+  }
+
+  /** Builds the parts until the page numbers of the parts agree with the pages of the preceding parts */
+  private async buildParts(): Promise<void> {
+    const heavyFirst = (parts: number[]) =>
+      orderPartsHeavyFirst(parts, this.bounds, this.docPages);
+    let pending = heavyFirst(this.mismatchedParts());
+    for (let round = 1; pending.length > 0; round++) {
+      if (round > MAX_ROUNDS) {
+        throw new Error(
+          'The page numbers of the parts did not settle. Try choosing other entries for "parallel.splitBefore".',
+        );
+      }
+      const nothingBuilt = this.results.every((result) => !result);
+      Logger.logInfo(
+        nothingBuilt && pending.length === this.partCount
+          ? `Building ${this.partCount} parts in parallel`
+          : `Building ${pending.length} parts again with the right page numbers`,
+      );
+      await Promise.all([
+        pool(
+          pending.map((index) => () => this.buildPart(index)),
+          this.jobs,
+        ),
+        // the cover and the TOC with dummy numbers, to know the number of their pages
+        nothingBuilt ? this.buildDummyFront() : undefined,
+      ]);
+      pending = heavyFirst(this.mismatchedParts());
+    }
+  }
+
+  // ---- the cover and the TOC ---------------------------------------------------------------------------------
+
+  /** Compiles the whole book, for the cover and the TOC, once the parts have compiled their documents */
+  private compile(): Promise<void> {
+    this.compiled ??= (async () => {
+      if (!this.hasFront) {
         return;
       }
-      // The TOC is generated from the documents that the parts compile, so wait for them
+      const marks = range(0, this.partCount).map((i) => this.compiledMark(i));
       while (!marks.every((mark) => fs.existsSync(mark))) {
-        signal?.throwIfAborted();
+        this.signal.throwIfAborted();
         await sleep(100);
       }
-      await run('compile', {
+      await this.runChild('compile', {
         entries: { keep: true },
-        output: { path: upath.join(workDir, 'compile.out'), format: 'webpub' },
-        workspaceDir: compileDir,
-        precompiledDirs: partDirs,
-        browserWsEndpoint,
+        output: {
+          path: upath.join(this.workDir, 'compile.out'),
+          format: 'webpub',
+        },
+        workspaceDir: this.compileDir,
+        precompiledDirs: range(0, this.partCount).map((i) => this.partDir(i)),
       });
-    };
+    })();
+    return this.compiled;
+  }
 
-    // ---- the parts ------------------------------------------------------------------------------------------
-    const results: (PartResult | undefined)[] = Array.from({
-      length: partCount,
-    });
-    const skipped: number[] = Array.from({ length: partCount }, () => 0);
-    /** The page number given to the first page of each entry */
-    const usedNumber: (number | undefined)[] = Array.from({
-      length: entryCount,
-    });
-    const buildPart = async (index: number) => {
-      const [from, to] = [bounds[index], bounds[index + 1]];
-      // A page number is counted from the first page of the part, and is reset by each document. So each
-      // document is given the page number it has in the whole book.
-      const inlineStyles: { path: string; css: string }[] = [];
-      for (let i = from; i < to; i++) {
-        const number = startNumber(i);
-        usedNumber[i] = number;
-        inlineStyles.push({
-          path: task.entry[i].path ?? '',
-          css: `@page :nth(1) { counter-reset: page ${number - 1}; }`,
-        });
-      }
-      // A spare page makes the first page of the part be on the same side (left/right) as in the book
-      const leadingFiles: PartSpec['leadingFiles'] = [];
-      if (startNumber(from) % 2 === 0) {
-        leadingFiles.push({
-          path: temporaryFile(
-            `spare-${index}.html`,
-            '<!doctype html><html><head><meta charset="utf-8"><title>spare</title></head><body><p>.</p></body></html>',
-          ),
-        });
-      }
-      const pdf = upath.join(workDir, `part-${index}.pdf`);
-      const resultPath = upath.join(workDir, `part-${index}.result.json`);
-      await run(`part-${index}`, {
-        entries: { range: [from, to] },
-        inlineStyles,
-        leadingFiles,
-        withoutTocAndCover: true,
-        output: { path: pdf, format: 'pdf' },
-        workspaceDir: partDirs[index],
-        resultPath,
-        compiledMark: marks[index],
-        browserWsEndpoint,
+  private get compileDir(): string {
+    return upath.join(this.workDir, 'compile');
+  }
+
+  private compiledTarget(entry: ParsedEntry): string {
+    return upath.join(
+      this.compileDir,
+      upath.relative(this.config.workspaceDir, entry.target),
+    );
+  }
+
+  /**
+   * Builds the cover and the TOC. The page numbers of the links of the TOC are written as text, by `pageOf`
+   * (or `00` to know the number of the pages).
+   */
+  private async buildFrontPdf(
+    pageOf?: (href: string) => string,
+  ): Promise<{ pdf: string; result: PartResult }> {
+    const files: { path: string; theme: string[] }[] = [];
+    if (this.cover) {
+      files.push({
+        path: this.temporaryFile(
+          'front-cover.html',
+          stripLinks(fs.readFileSync(this.compiledTarget(this.cover), 'utf8')),
+        ),
+        theme: this.cover.themes.map(themeSpecifier),
       });
-      const result = readJson<PartResult>(resultPath);
-      pageCountOf(result, `the part ${index}`);
-      results[index] = result;
-      const spare = leadingFiles.length;
-      const spineIndexes = result.pageInfo?.spineIndexes ?? [];
-      skipped[index] = spare ? spineIndexes.filter((i) => i === 0).length : 0;
-      for (let i = from; i < to; i++) {
-        docPages[i] = spineIndexes.filter(
-          (spine) => spine === i - from + spare,
-        ).length;
-      }
-    };
-
-    // The cover and the TOC with dummy numbers are built to know the number of their pages
-    const dummyFront = async () => {
-      if (!hasFront || frontPages !== undefined) {
-        return;
-      }
-      await compile();
-      await buildFront();
-      frontPages = pageCountOf(
-        readJson<PartResult>(upath.join(workDir, 'front-dummy.result.json')),
-        'the cover and the TOC',
-      );
-    };
-
-    // ---- the cover and the TOC --------------------------------------------------------------------------------
-    const compiledTarget = (entry: ParsedEntry) =>
-      upath.join(compileDir, upath.relative(config.workspaceDir, entry.target));
-    const frontEntries = (pageOf?: (href: string) => string) => {
-      const files: { path: string; theme: string[] }[] = [];
-      const cover = config.entries.find((e) => e.rel === 'cover');
-      if (cover) {
-        files.push({
-          path: temporaryFile(
-            'front-cover.html',
-            stripLinks(fs.readFileSync(compiledTarget(cover), 'utf8')),
-          ),
-          theme: cover.themes.map(themeSpecifier),
-        });
-      }
-      const contents = config.entries.find((e) => e.rel === 'contents');
-      if (contents) {
-        const html = fs
-          .readFileSync(compiledTarget(contents), 'utf8')
-          .replaceAll(
-            /<a href="([^"]*)"/gv,
-            (_match, href: string) =>
-              `<a href="${href}" data-page="${pageOf ? pageOf(href) : '00'}"`,
-          )
-          .replace(
-            '</head>',
-            '<style>nav li a::after { content: attr(data-page) !important; }</style></head>',
-          );
-        files.push({
-          path: temporaryFile('front-toc.html', stripLinks(html)),
-          theme: contents.themes.map(themeSpecifier),
-        });
-      }
-      return files;
-    };
-    const buildFront = async (
-      pageOf?: (href: string) => string,
-    ): Promise<string> => {
-      const name = pageOf ? 'front' : 'front-dummy';
-      const pdf = upath.join(workDir, `${name}.pdf`);
-      await run(name, {
-        entries: { files: frontEntries(pageOf) },
-        withoutTocAndCover: true,
-        output: { path: pdf, format: 'pdf' },
-        workspaceDir: upath.join(workDir, name),
-        resultPath: upath.join(workDir, `${name}.result.json`),
-        browserWsEndpoint,
-      });
-      return pdf;
-    };
-
-    // ---- build until the page numbers of the parts agree with the pages of the preceding parts ---------------
-    const mismatchedParts = () =>
-      Array.from({ length: partCount }, (_, i) => i).filter((index) =>
-        Array.from(
-          { length: bounds[index + 1] - bounds[index] },
-          (_, j) => bounds[index] + j,
-        ).some((i) => usedNumber[i] !== startNumber(i)),
-      );
-    const heavyFirst = (parts: number[]) =>
-      orderPartsHeavyFirst(parts, bounds, docPages);
-    const settle = async () => {
-      let pending = heavyFirst(mismatchedParts());
-      for (let round = 1; pending.length > 0; round++) {
-        if (round > MAX_ROUNDS) {
-          throw new Error(
-            'The page numbers of the parts did not settle. Try choosing other entries for "parallel.splitBefore".',
-          );
-        }
-        Logger.logInfo(
-          pending.length === partCount && results.every((r) => !r)
-            ? `Building ${partCount} parts in parallel`
-            : `Building ${pending.length} parts again with the right page numbers`,
-        );
-        await Promise.all([
-          pool(
-            pending.map((index) => () => buildPart(index)),
-            jobs,
-          ),
-          // the cover and the TOC with dummy numbers, to know the number of their pages
-          results.every((r) => !r) ? compile().then(dummyFront) : undefined,
-        ]);
-        pending = heavyFirst(mismatchedParts());
-      }
-    };
-    // If the previous build left the page numbers of the links of the TOC, the cover and the TOC are built while
-    // the parts are built, and they are used if the numbers turn out to be the same
-    let speculativeFront: Promise<Record<string, string> | null> | undefined;
-    if (hasFront && cache?.tocNumbers && cache.frontPages !== undefined) {
-      const numbers = cache.tocNumbers;
-      speculativeFront = compile()
-        .then(() => buildFront((href) => numbers[href] ?? ''))
-        .then(() => numbers)
-        // If it failed, the cover and the TOC are built again (and the error is reported then)
-        .catch(() => null);
     }
-    await settle();
-    Logger.debug(`parallel > parts built in ${Date.now() - t0} ms`);
+    if (this.contents) {
+      const html = fs
+        .readFileSync(this.compiledTarget(this.contents), 'utf8')
+        .replaceAll(
+          /<a href="([^"]*)"/gv,
+          (_match, href: string) =>
+            `<a href="${href}" data-page="${pageOf ? pageOf(href) : '00'}"`,
+        );
+      files.push({
+        path: this.temporaryFile(
+          'front-toc.html',
+          stripLinks(
+            injectStyle(
+              html,
+              'nav li a::after { content: attr(data-page) !important; }',
+            ),
+          ),
+        ),
+        theme: this.contents.themes.map(themeSpecifier),
+      });
+    }
+    const name = pageOf ? 'front' : 'front-dummy';
+    const pdf = upath.join(this.workDir, `${name}.pdf`);
+    await this.runChild(name, {
+      entries: { files },
+      withoutTocAndCover: true,
+      output: { path: pdf, format: 'pdf' },
+      workspaceDir: upath.join(this.workDir, name),
+      resultPath: upath.join(this.workDir, `${name}.result.json`),
+    });
+    return { pdf, result: this.readResult(name) };
+  }
 
-    // ---- the front, with the real numbers ---------------------------------------------------------------------
-    // Where the places that links refer to are in the body (the pages after the cover and the TOC).
-    // The viewer puts an element named like the PDF destination on every element that has an id.
-    const documentStart: number[] = [];
-    const positions = new Map<string, { page: number; x: number; y: number }>();
-    const updatePositions = () => {
-      documentStart.length = 0;
-      positions.clear();
-      let documentOffset = 0;
-      for (let i = 0; i < entryCount; i++) {
-        documentStart[i] = documentOffset;
-        documentOffset += docPages[i] ?? 0;
+  private async buildDummyFront(): Promise<void> {
+    if (!this.hasFront || this.frontPages !== undefined) {
+      return;
+    }
+    await this.compile();
+    const { result } = await this.buildFrontPdf();
+    this.frontPages = frontPageCountOf(result);
+  }
+
+  /**
+   * If the previous build left the page numbers of the links of the TOC, the cover and the TOC are built while
+   * the parts are built; they are used if the numbers turn out to be the same.
+   */
+  private startSpeculativeFront():
+    | Promise<{
+        numbers: Record<string, string>;
+        front: { pdf: string; result: PartResult };
+      } | null>
+    | undefined {
+    const numbers = this.cache?.tocNumbers;
+    if (!this.hasFront || !numbers || this.cache?.frontPages === undefined) {
+      return undefined;
+    }
+    return (
+      this.compile()
+        .then(() => this.buildFrontPdf((href) => numbers[href] ?? ''))
+        .then((front) => ({ numbers, front }))
+        // If it failed, the cover and the TOC are built again (and the error is reported then)
+        .catch(() => null)
+    );
+  }
+
+  private pageOf(href: string): string {
+    const url = new URL(href, this.tocUrl);
+    const place = this.locate(destinationNameOf(url.pathname, url.hash));
+    if (!place) {
+      Logger.logWarn(`Could not find the page of the TOC link: ${href}`);
+      return '';
+    }
+    return String((this.frontPages ?? 0) + place.page + 1);
+  }
+
+  private async buildFront(
+    speculative: Awaited<ReturnType<ParallelBuild['startSpeculativeFront']>>,
+  ): Promise<void> {
+    await this.compile();
+    const pageOf = (href: string) => this.pageOf(href);
+    const hrefs = this.contents
+      ? tocHrefsOf(fs.readFileSync(this.compiledTarget(this.contents), 'utf8'))
+      : [];
+    if (
+      speculative &&
+      hrefs.every((href) => pageOf(href) === speculative.numbers[href]) &&
+      frontPageCountOf(speculative.front.result) === this.frontPages
+    ) {
+      Logger.debug(
+        'parallel > the cover and the TOC built in advance are used',
+      );
+      this.front = speculative.front;
+    }
+    for (let attempt = 1; !this.front; attempt++) {
+      const front = await this.buildFrontPdf(pageOf);
+      const actual = frontPageCountOf(front.result);
+      if (actual === this.frontPages) {
+        this.front = front;
+      } else if (attempt >= MAX_ROUNDS) {
+        throw new Error(
+          'The number of the pages of the cover and the TOC did not settle.',
+        );
+      } else {
+        // The number of the pages changed from the previous build: the parts need the right numbers
+        this.frontPages = actual;
+        await this.buildParts();
+        this.updatePlaces();
       }
-      results.forEach((result, k) => {
-        const spare = skipped[k] > 0 ? 1 : 0;
-        const spineIndexes = result?.pageInfo?.spineIndexes ?? [];
-        for (const [spine, ids] of Object.entries(
-          result?.pageInfo?.ids ?? {},
-        )) {
-          const global = bounds[k] + Number(spine) - spare;
-          const first = spineIndexes.indexOf(Number(spine));
-          for (const [id, [ix, x, y]] of Object.entries(ids)) {
-            if (id.startsWith('viv-id-')) {
-              positions.set(normalizeDestinationName(id), {
-                page: documentStart[global] + ix - first,
-                x,
-                y,
-              });
-            }
+    }
+    this.tocNumbers = Object.fromEntries(
+      hrefs.map((href) => [href, pageOf(href)]),
+    );
+  }
+
+  // ---- where the places that links refer to are ----------------------------------------------------------
+
+  /**
+   * Finds the places of the elements in the body. The viewer puts an element named like the PDF destination
+   * on every element that has an id.
+   */
+  private updatePlaces(): void {
+    const documentStart: number[] = [];
+    let offset = 0;
+    for (let i = 0; i < this.entryCount; i++) {
+      documentStart[i] = offset;
+      offset += this.docPages[i] ?? 0;
+    }
+    this.places.clear();
+    this.results.forEach((result, k) => {
+      const spare = this.skipped[k] > 0 ? 1 : 0;
+      const spineIndexes = result?.pageInfo?.spineIndexes ?? [];
+      for (const [spine, ids] of Object.entries(result?.pageInfo?.ids ?? {})) {
+        const global = this.bounds[k] + Number(spine) - spare;
+        const first = spineIndexes.indexOf(Number(spine));
+        for (const [id, [index, x, y]] of Object.entries(ids)) {
+          if (id.startsWith('viv-id-')) {
+            this.places.set(normalizeDestinationName(id), {
+              page: documentStart[global] + index - first,
+              x,
+              y,
+            });
           }
         }
-      });
-    };
-    updatePositions();
-    const basePath = `${config.base.replace(/\/$/v, '')}/`;
-    /** Position of a place of the book, or of the document when the place has no element */
-    const locate = (name: string) =>
-      positions.get(name) ?? positions.get(name.replace(/:0023.*$/v, ''));
-
-    let frontPdf: string | undefined;
-    let frontResult: PartResult | undefined;
-    let tocNumbers: Record<string, string> | undefined;
-    if (hasFront) {
-      await compile();
-      const contentsEntry = config.entries.find((e) => e.rel === 'contents');
-      const tocUrl = `http://localhost:0${basePath}${
-        contentsEntry
-          ? upath.relative(config.workspaceDir, contentsEntry.target)
-          : ''
-      }`;
-      const pageOf = (href: string): string => {
-        const url = new URL(href, tocUrl);
-        const position = locate(destinationNameOf(url.pathname, url.hash));
-        if (!position) {
-          Logger.logWarn(`Could not find the page of the TOC link: ${href}`);
-          return '';
-        }
-        return String((frontPages ?? 0) + position.page + 1);
-      };
-      const hrefs = contentsEntry
-        ? tocHrefsOf(fs.readFileSync(compiledTarget(contentsEntry), 'utf8'))
-        : [];
-      let frontReady = false;
-      const speculativeNumbers = await speculativeFront;
-      if (
-        speculativeNumbers &&
-        hrefs.every((href) => pageOf(href) === speculativeNumbers[href])
-      ) {
-        const result = readJson<PartResult>(
-          upath.join(workDir, 'front.result.json'),
-        );
-        if (pageCountOf(result, 'the cover and the TOC') === frontPages) {
-          frontPdf = upath.join(workDir, 'front.pdf');
-          frontResult = result;
-          frontReady = true;
-          Logger.debug(
-            'parallel > the cover and the TOC built in advance are used',
-          );
-        }
       }
-      for (let attempt = 1; !frontReady; attempt++) {
-        frontPdf = await buildFront(pageOf);
-        frontResult = readJson<PartResult>(
-          upath.join(workDir, 'front.result.json'),
-        );
-        const actual = pageCountOf(frontResult, 'the cover and the TOC');
-        frontReady = actual === frontPages;
-        if (!frontReady && attempt >= MAX_ROUNDS) {
-          throw new Error(
-            'The number of the pages of the cover and the TOC did not settle.',
-          );
-        }
-        if (!frontReady) {
-          // The number of the pages changed from the previous build: the parts need the right numbers
-          frontPages = actual;
-          await settle();
-          updatePositions();
-        }
-      }
-      tocNumbers = Object.fromEntries(
-        hrefs.map((href) => [href, pageOf(href)]),
-      );
-    }
+    });
+  }
 
-    // ---- merge and post-process -------------------------------------------------------------------------------
-    Logger.logUpdate('Merging PDFs');
-    const partResults = results.map((result, index) => {
+  /** The place of a destination, or of the document when the place has no element */
+  private locate(name: string): Place | undefined {
+    return (
+      this.places.get(name) ?? this.places.get(name.replace(/:0023.*$/v, ''))
+    );
+  }
+
+  // ---- merge and post-process --------------------------------------------------------------------------------
+
+  private partResults(): PartResult[] {
+    return this.results.map((result, index) => {
       if (!result) {
         throw new Error(`The part ${index} has not been built.`);
       }
       return result;
     });
-    const sections: { result: PartResult; skip: number }[] = [
-      ...(frontResult ? [{ result: frontResult, skip: 0 }] : []),
-      ...partResults.map((result, k) => ({ result, skip: skipped[k] })),
+  }
+
+  /** The results of the PDFs to merge, and the pages that are left out at the beginning of each */
+  private sections(): { result: PartResult; skip: number }[] {
+    return [
+      ...(this.front ? [{ result: this.front.result, skip: 0 }] : []),
+      ...this.partResults().map((result, k) => ({
+        result,
+        skip: this.skipped[k],
+      })),
     ];
-    const pageSizeData: PageSizeData[] = sections.flatMap(({ result, skip }) =>
+  }
+
+  private pageSizeData(): PageSizeData[] {
+    return this.sections().flatMap(({ result, skip }) =>
       result.pageSizeData.slice(skip),
     );
-    const cmykMap: CmykMap = {};
-    for (const { result } of sections) {
-      Object.assign(cmykMap, result.cmykMap);
-    }
-    // The TOC of the book is the one of the TOC document; without it, the ones of the parts are put together
-    const contentsEntry = config.entries.find((e) => e.rel === 'contents');
-    const tocItems =
-      frontResult && frontResult.toc.length > 0
-        ? normalizeTocItems(frontResult.toc)
-        : contentsEntry
-          ? readTocItems(
-              fs.readFileSync(compiledTarget(contentsEntry), 'utf8'),
-              `http://localhost:0${basePath}${upath.relative(config.workspaceDir, contentsEntry.target)}`,
-            )
-          : normalizeTocItems(partResults.flatMap((result) => result.toc));
-    const first = sections[0].result;
+  }
 
+  /** The TOC of the book is the one of the TOC document; without it, the ones of the parts are put together */
+  private tocItems(): TOCItem[] {
+    if (this.front && this.front.result.toc.length > 0) {
+      return normalizeTocItems(this.front.result.toc);
+    }
+    if (this.contents) {
+      return readTocItems(
+        fs.readFileSync(this.compiledTarget(this.contents), 'utf8'),
+        this.tocUrl,
+      );
+    }
+    return normalizeTocItems(
+      this.partResults().flatMap((result) => result.toc),
+    );
+  }
+
+  private merge(): Promise<Uint8Array> {
+    Logger.logUpdate('Merging PDFs');
+    const pageSizeData = this.pageSizeData();
     const outlineIds: string[] = [];
     const collectIds = (items: TOCItem[]) => {
       for (const item of items) {
@@ -728,130 +857,143 @@ export async function buildInParallel(
         collectIds(item.children);
       }
     };
-    collectIds(tocItems);
+    collectIds(this.tocItems());
     // Chromium defines the destinations of the links in the same PDF only. Define the ones that refer to other parts.
     const resolveDestination = (name: string): PdfDestination | undefined => {
-      const position = locate(name);
-      const pageIndex = position && (frontPages ?? 0) + position.page;
-      const pageHeight =
-        pageIndex === undefined
-          ? undefined
-          : pageSizeData[pageIndex]?.mediaHeight;
-      if (!position || pageIndex === undefined || !pageHeight) {
+      const place = this.locate(name);
+      if (!place) {
         return undefined;
       }
-      return { pageIndex, x: position.x, y: pageHeight - position.y };
+      const pageIndex = (this.frontPages ?? 0) + place.page;
+      const pageHeight = pageSizeData[pageIndex]?.mediaHeight;
+      return pageHeight
+        ? { pageIndex, x: place.x, y: pageHeight - place.y }
+        : undefined;
     };
     // The links of the TOC refer to documents that are not in the PDF of the cover and the TOC
     const localHosts = new Set([
       'localhost',
       '127.0.0.1',
       '[::1]',
-      config.server.host,
+      this.config.server.host,
     ]);
     const uriToDestination = (uri: string): string | undefined => {
-      let url: URL;
-      try {
-        url = new URL(uri);
-      } catch {
+      if (!URL.canParse(uri)) {
         return undefined;
       }
-      return localHosts.has(url.hostname) && url.pathname.startsWith(basePath)
+      const url = new URL(uri);
+      return localHosts.has(url.hostname) &&
+        url.pathname.startsWith(this.basePath)
         ? destinationNameOf(url.pathname, url.hash)
         : undefined;
     };
-    const merged = await mergePdfs(
+    return mergePdfs(
       [
-        ...(frontPdf && frontResult
+        ...(this.front
           ? [
               {
-                pdf: fs.readFileSync(frontPdf),
-                pageCount: pageCountOf(frontResult, 'the cover and the TOC'),
+                pdf: fs.readFileSync(this.front.pdf),
+                pageCount: frontPageCountOf(this.front.result),
               },
             ]
           : []),
-        ...partResults.map((result, k) => ({
-          pdf: fs.readFileSync(upath.join(workDir, `part-${k}.pdf`)),
-          skipPages: skipped[k],
-          pageCount: pageCountOf(result, `the part ${k}`),
+        ...this.partResults().map((result, k) => ({
+          pdf: fs.readFileSync(upath.join(this.workDir, `part-${k}.pdf`)),
+          skipPages: this.skipped[k],
+          pageCount: spineIndexesOf(result, `the part ${k}`).length,
         })),
       ],
       {
-        signal,
+        signal: this.signal,
         requiredDestinations: outlineIds,
         resolveDestination,
         uriToDestination,
       },
     );
+  }
 
-    // Entries that are not known to be safe to split before: the book has to be the same as the book built as a
-    // whole. Otherwise, this PDF is kept as the reference for the next build, which can use it to check.
-    if (hash && unverified && unverified.length > 0) {
-      Logger.logUpdate('Checking the PDF');
-      const reference = readReference(cachePath, cacheKey);
-      if (!reference) {
-        throw new Error('The PDF to check the book with is missing.');
-      }
-      const different = firstDifferentPage(
-        reference.pages,
-        await fingerprintPdf(merged),
-      );
-      if (different !== undefined) {
-        throw new UnsafeSplitError(unverified, different);
-      }
-    } else if (hash) {
-      writeReference(cachePath, {
-        key: cacheKey,
-        hash,
+  /**
+   * With entries that are not known to be safe to split before, the book has to be the same as the book built as
+   * a whole. Otherwise, the PDF is kept as the reference for the next build, which can use it to check.
+   */
+  private async checkOrKeepReference(merged: Uint8Array): Promise<void> {
+    if (!this.hash) {
+      return;
+    }
+    if (this.unverified.length === 0) {
+      writeReference(this.cachePath, {
+        key: this.cacheKey,
+        hash: this.hash,
         pages: await fingerprintPdf(merged),
       });
+      return;
     }
+    Logger.logUpdate('Checking the PDF');
+    const reference = readReference(this.cachePath, this.cacheKey);
+    if (!reference) {
+      throw new Error('The PDF to check the book with is missing.');
+    }
+    const different = firstDifferentPage(
+      reference.pages,
+      await fingerprintPdf(merged),
+    );
+    if (different !== undefined) {
+      throw new UnsafeSplitError(this.unverified, different);
+    }
+  }
 
-    fs.mkdirSync(upath.dirname(target.path), { recursive: true });
+  private async postProcess(merged: Uint8Array): Promise<void> {
+    const first = this.sections()[0].result;
+    const cmykMap: CmykMap = {};
+    for (const { result } of this.sections()) {
+      Object.assign(cmykMap, result.cmykMap);
+    }
+    fs.mkdirSync(upath.dirname(this.target.path), { recursive: true });
     Logger.logUpdate('Processing PDF');
     await postProcessPDF({
       pdf: merged,
-      output: target.path,
+      output: this.target.path,
       metadata: first.metadata,
       metadataOptions: {
         pageProgression: first.pageProgression,
         browserVersion: first.browserVersion,
         viewerCoreVersion: first.viewerCoreVersion,
-        disableCreatorOption: !!config.viewer && !first.viewerCoreVersion,
+        disableCreatorOption: !!this.config.viewer && !first.viewerCoreVersion,
       },
-      tocItems,
-      pageSizeData,
-      preflight: target.preflight,
-      preflightOption: target.preflightOption,
-      image: config.image,
-      cmyk: target.cmyk,
+      tocItems: this.tocItems(),
+      pageSizeData: this.pageSizeData(),
+      preflight: this.target.preflight,
+      preflightOption: this.target.preflightOption,
+      image: this.config.image,
+      cmyk: this.target.cmyk,
       cmykMap,
-      replaceImage: target.replaceImage,
-      outputIntent: target.outputIntent,
-      signal,
+      replaceImage: this.target.replaceImage,
+      outputIntent: this.target.outputIntent,
+      signal: this.signal,
     });
+  }
 
-    writeLayoutCache(cachePath, {
-      key: cacheKey,
-      frontPages: frontPages ?? 0,
-      docPages: docPages.map((n) => n ?? 0),
-      ...(tocNumbers ? { tocNumbers } : {}),
+  /** Keeps what this build found out for the next build */
+  private saveLayout(): void {
+    writeLayoutCache(this.cachePath, {
+      key: this.cacheKey,
+      frontPages: this.frontPages ?? 0,
+      docPages: this.docPages.map((n) => n ?? 0),
+      ...(this.tocNumbers ? { tocNumbers: this.tocNumbers } : {}),
     });
-    if (unverified && unverified.length > 0) {
-      recordSplitResult(cachePath, cacheKey, { verified: unverified });
-    }
-    return target.path;
-  } catch (error) {
-    // Stop the child processes that are still running
-    failure.abort(error);
-    throw error;
-  } finally {
-    await sharedBrowser?.closeBrowser();
-    fs.rmSync(workDir, { recursive: true, force: true });
-    for (const file of temporaryFiles) {
-      fs.rmSync(file, { force: true });
+    if (this.unverified.length > 0) {
+      recordSplitResult(this.cachePath, this.cacheKey, {
+        verified: this.unverified,
+      });
     }
   }
+}
+
+/**
+ * Builds the task in parts. Returns the path of the output PDF.
+ */
+export function buildInParallel(options: ParallelBuildRun): Promise<string> {
+  return new ParallelBuild(options).run();
 }
 
 /**
@@ -903,8 +1045,8 @@ function stripLinks(html: string): string {
   return html.replaceAll(/<link[^>]*>/gv, '');
 }
 
-/** The number of the pages that a child process reported. */
-function pageCountOf(result: PartResult, name: string): number {
+/** The documents of the pages that a child process reported. */
+function spineIndexesOf(result: PartResult, name: string): number[] {
   const spineIndexes = result.pageInfo?.spineIndexes ?? [];
   if (
     spineIndexes.length === 0 ||
@@ -914,5 +1056,8 @@ function pageCountOf(result: PartResult, name: string): number {
       `The viewer did not tell the pages of ${name}. The viewer needs to set data-vivliostyle-spine-index on the page containers.`,
     );
   }
-  return spineIndexes.length;
+  return spineIndexes;
 }
+
+const frontPageCountOf = (result: PartResult): number =>
+  spineIndexesOf(result, 'the cover and the TOC').length;

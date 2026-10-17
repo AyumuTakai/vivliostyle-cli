@@ -293,6 +293,7 @@ export async function buildPDF({
       Logger.debug('Remaining timeout:', remainTime);
 
       Logger.logUpdate('Building PDF');
+      await waitForEmbeddedContent(page);
 
       // For Firefox WebDriver BiDi, explicitly set width and height
       // because page.pdf() doesn't support for the preferCSSPageSize option.
@@ -473,6 +474,78 @@ export interface PartResult {
   pageSizeData: PageSizeData[];
   cmykMap: CmykMap;
   pageInfo: PageInfo | undefined;
+}
+
+const EMBEDDED_CONTENT_SELECTOR =
+  '[data-vivliostyle-page-container] :is(object, embed)';
+/** How long the content of the `<object>` and `<embed>` elements is waited for, in milliseconds */
+const EMBEDDED_CONTENT_TIMEOUT = 5000;
+
+/**
+ * Waits for the content of the `<object>` and `<embed>` elements of the pages in the print layout. The browser drops
+ * that content while a page is hidden and loads it again when the page is shown, as every page is when printed, so
+ * the content would be missing from the PDF if it were printed at once. The print layout is kept for the PDF.
+ */
+async function waitForEmbeddedContent(page: Page): Promise<void> {
+  /* v8 ignore start */
+  const count = await page.evaluate((selector: string) => {
+    const elements = document.querySelectorAll(selector);
+    // The elements that are shown now keep their content; the others are loaded again
+    const loaded = new WeakSet<Element>();
+    for (const element of elements) {
+      if (element.getClientRects().length > 0) {
+        loaded.add(element);
+      } else {
+        element.addEventListener(
+          'load',
+          () => {
+            loaded.add(element);
+          },
+          { once: true },
+        );
+      }
+    }
+    Reflect.set(window, 'vsEmbeddedLoaded', loaded);
+    return elements.length;
+  }, EMBEDDED_CONTENT_SELECTOR);
+  /* v8 ignore stop */
+  if (count === 0) {
+    return;
+  }
+  await page.emulateMediaType('print');
+  try {
+    await page.waitForFunction(
+      /* v8 ignore start */
+      (selector: string) => {
+        const loaded: unknown = Reflect.get(window, 'vsEmbeddedLoaded');
+        return [
+          ...document.querySelectorAll<HTMLObjectElement | HTMLEmbedElement>(
+            selector,
+          ),
+        ].every((element) => {
+          if (loaded instanceof WeakSet && loaded.has(element)) {
+            return true;
+          }
+          // The load event may have been missed; the content of the same origin can be looked at
+          const content =
+            element.getSVGDocument() ??
+            (element instanceof HTMLObjectElement
+              ? element.contentDocument
+              : null);
+          return (
+            content?.readyState === 'complete' && content.URL !== 'about:blank'
+          );
+        });
+      },
+      /* v8 ignore stop */
+      { polling: 50, timeout: EMBEDDED_CONTENT_TIMEOUT },
+      EMBEDDED_CONTENT_SELECTOR,
+    );
+  } catch {
+    Logger.debug(
+      'Some contents of the object and embed elements are not loaded',
+    );
+  }
 }
 
 function loadPageInfo(page: Page): Promise<PageInfo> {
